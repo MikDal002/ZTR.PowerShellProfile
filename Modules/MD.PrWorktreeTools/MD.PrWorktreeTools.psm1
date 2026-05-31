@@ -51,6 +51,14 @@ function Get-DefaultWorktreesRoot {
     return (Join-Path $parentDir "$repoName.worktrees")
 }
 
+function Check-LastExitCode {
+    param([string]$StepName)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Błąd podczas kroku: $StepName"
+    }
+}
+
 function Invoke-Git {
     param([string]$StepName, [string[]]$GitArgs)
 
@@ -569,14 +577,6 @@ function New-EmptyPrWorktree {
         return $normalized
     }
 
-    function Check-LastExitCode {
-        param([string]$StepName)
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "Błąd podczas kroku: $StepName"
-        }
-    }
-
     function Read-HostWithDefault {
         param(
             [Parameter(Mandatory = $true)]
@@ -781,15 +781,6 @@ function New-WorktreeForPr {
 
     $ErrorActionPreference = "Stop"
 
-    function Check-LastExitCode {
-        param([string]$StepName)
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "Błąd podczas kroku: $StepName"
-        }
-    }
-
-
     $ghExists = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
     $gitExists = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
 
@@ -908,14 +899,6 @@ function ConvertTo-PrWorktree {
     )
 
     $ErrorActionPreference = "Stop"
-
-    function Check-LastExitCode {
-        param([string]$StepName)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Błąd podczas kroku: $StepName"
-        }
-    }
-
 
     $ghExists = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
     $gitExists = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
@@ -1147,14 +1130,6 @@ function New-DevWorktree {
     )
 
     $ErrorActionPreference = "Stop"
-
-    function Check-LastExitCode {
-        param([string]$StepName)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Błąd podczas kroku: $StepName"
-        }
-    }
-
 
     function Get-SanitizedBranchSegment {
         param([string]$Text)
