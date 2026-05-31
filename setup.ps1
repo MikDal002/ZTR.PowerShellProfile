@@ -8,29 +8,46 @@ $dependencies = @(
     @{ Name = "Git"; Check = "git"; WingetId = "Git.Git" },
     @{ Name = "GitHub CLI"; Check = "gh"; WingetId = "GitHub.cli" },
     @{ Name = "oh-my-posh"; Check = "oh-my-posh"; WingetId = "JanDeDobbeleer.OhMyPosh" },
-    @{ Name = "just"; Check = "just"; WingetId = "casey.just" }
+    @{ Name = "just"; Check = "just"; WingetId = "casey.just" },
+    @{ Name = "PwshSpectreConsole"; Check = "Write-SpectreHost"; Module = "PwshSpectreConsole" }
 )
 
 Write-Host "Rozpoczynam sprawdzanie zależności..." -ForegroundColor Cyan
 
 foreach ($dep in $dependencies) {
     Write-Host "Sprawdzam $($dep.Name)... " -NoNewline
-    if (Get-Command $dep.Check -ErrorAction SilentlyContinue) {
+    
+    $isInstalled = $false
+    if ($dep.Module) {
+        $isInstalled = $null -ne (Get-Module -ListAvailable $dep.Module)
+    } else {
+        $isInstalled = $null -ne (Get-Command $dep.Check -ErrorAction SilentlyContinue)
+    }
+
+    if ($isInstalled) {
         Write-Host "Zainstalowano." -ForegroundColor Green
     }
     else {
         Write-Host "Brak." -ForegroundColor Yellow
         $confirmation = Read-Host "Czy chcesz zainstalować $($dep.Name)? (y/n)"
         if ($confirmation -eq 'y') {
-            Write-Host "Instaluję $($dep.Name) (Winget ID: $($dep.WingetId))..." -ForegroundColor Cyan
+            $exitCode = 0
+            if ($dep.WingetId) {
+                Write-Host "Instaluję $($dep.Name) (Winget ID: $($dep.WingetId))..." -ForegroundColor Cyan
+                $process = Start-Process winget -ArgumentList "install --id $($dep.WingetId) --silent --accept-package-agreements --accept-source-agreements" -Wait -PassThru -NoNewWindow
+                $exitCode = $process.ExitCode
+            }
+            elseif ($dep.Module) {
+                Write-Host "Instaluję moduł PowerShell $($dep.Name)..." -ForegroundColor Cyan
+                Install-Module -Name $dep.Module -Scope CurrentUser -Force -Confirm:$false
+                $exitCode = if ($?) { 0 } else { 1 }
+            }
             
-            $process = Start-Process winget -ArgumentList "install --id $($dep.WingetId) --silent --accept-package-agreements --accept-source-agreements" -Wait -PassThru -NoNewWindow
-            
-            if ($process.ExitCode -eq 0) {
+            if ($exitCode -eq 0) {
                 Write-Host "Pomyślnie zainstalowano $($dep.Name)." -ForegroundColor Green
             }
             else {
-                Write-Warning "Nie udało się zainstalować $($dep.Name). Kod wyjścia: $($process.ExitCode)."
+                Write-Warning "Nie udało się zainstalować $($dep.Name). Kod wyjścia/status: $exitCode."
             }
         }
         else {
@@ -40,4 +57,33 @@ foreach ($dep in $dependencies) {
 }
 
 Write-Host "`nZależności sprawdzone." -ForegroundColor Cyan
-Write-Host "Pamiętaj, aby zrestartować terminal po instalacji nowych narzędzi, aby zmiany w PATH weszły w życie." -ForegroundColor Yellow
+
+# Konfiguracja środowiska agenta dla Invoke-Prompt
+Write-Host "`n[Konfiguracja domyślnego asystenta AI]" -ForegroundColor Cyan
+
+Import-Module PwshSpectreConsole
+
+Write-SpectreHost "Moduł MD.PrPromptingTools (komenda Invoke-Prompt) wspiera obecnie dwa silniki:"
+Write-SpectreHost "1) [cyan]droid[/]  - używa 'droid exec' jako głównego runnera."
+Write-SpectreHost "2) [cyan]gemini[/] - używa natywnego 'gemini' CLI (eksperymentalne/lekkie wywołania)."
+Write-SpectreHost "Brak konfiguracji domyślnie użyje [cyan]droid[/]."
+
+$choices = @("droid", "gemini", "Pomiń ustawianie")
+$runnerChoice = Read-SpectreSelection -Message "Wybierz domyślnego runnera dla swojej maszyny:" -Choices $choices
+
+if ($runnerChoice -eq 'Pomiń ustawianie') {
+    Write-SpectreHost "[grey]Pominięto ustawianie domyślnego runnera. Możesz to zrobić później ustawiając zmienną środowiskową ZTR_DEFAULT_RUNNER.[/]"
+}
+elseif ($runnerChoice -eq 'droid') {
+    [Environment]::SetEnvironmentVariable('ZTR_DEFAULT_RUNNER', 'droid', 'User')
+    $env:ZTR_DEFAULT_RUNNER = 'droid'
+    Write-SpectreHost "[green]Ustawiono 'droid' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
+}
+elseif ($runnerChoice -eq 'gemini') {
+    [Environment]::SetEnvironmentVariable('ZTR_DEFAULT_RUNNER', 'gemini', 'User')
+    $env:ZTR_DEFAULT_RUNNER = 'gemini'
+    Write-SpectreHost "[green]Ustawiono 'gemini' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
+}
+
+Write-Host "`nPamiętaj, aby zrestartować terminal po instalacji nowych narzędzi, aby zmiany w PATH weszły w życie." -ForegroundColor Yellow
+
