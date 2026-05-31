@@ -1257,10 +1257,11 @@ function New-DevWorktree {
     }
 
     Invoke-Git "fetch origin" @('fetch', 'origin')
-
-    & git show-ref --verify --quiet "refs/remotes/origin/development"
+    
+    $baseBranch = git symbolic-ref refs/remotes/origin/HEAD 2>$null | Select-Object -First 1
+    & git show-ref --verify --quiet -- "$baseBranch"
     if ($LASTEXITCODE -ne 0) {
-        throw "Gałąź bazowa 'origin/development' nie istnieje."
+        throw "Gałąź bazowa '$baseBranch' nie istnieje."
     }
 
     & git show-ref --verify --quiet "refs/heads/$BranchName"
@@ -1284,13 +1285,13 @@ function New-DevWorktree {
     }
 
     Write-Host ""
-    Write-Host "Tworzę worktree od origin/development..." -ForegroundColor Cyan
+    Write-Host "Tworzę worktree od $baseBranch..." -ForegroundColor Cyan
     Write-Host "Branch:   $BranchName"
-    Write-Host "Base:     origin/development"
+    Write-Host "Base:     $baseBranch"
     Write-Host "Worktree: $worktreePath"
     Write-Host ""
 
-    Invoke-Git "create worktree" @('worktree', 'add', '-b', $BranchName, $worktreePath, 'origin/development')
+    Invoke-Git "create worktree" @('worktree', 'add', '-b', $BranchName, $worktreePath, $baseBranch)
 
     Write-Host "Gotowe ✅" -ForegroundColor Green
 
