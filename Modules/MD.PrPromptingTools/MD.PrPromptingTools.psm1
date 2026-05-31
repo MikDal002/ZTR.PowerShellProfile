@@ -8,6 +8,8 @@ class PromptConfig {
     }
 }
 
+Import-Module PwshSpectreConsole
+
 function Get-PromptingModuleRoot {
     $module = $MyInvocation.MyCommand.Module
     if ($null -eq $module -or [string]::IsNullOrWhiteSpace($module.ModuleBase)) {
@@ -119,15 +121,7 @@ function Get-PromptImprovePendingReview {
 
 function Select-ModelInteractive {
     $models = @('Gemini', 'Sonnet', 'GPT')
-    Write-Host 'Wybierz model:' -ForegroundColor Yellow
-    for ($i = 0; $i -lt $models.Count; $i++) {
-        Write-Host "  [$($i + 1)] $($models[$i])"
-    }
-    do {
-        $raw = Read-Host "Model [1-$($models.Count)]"
-        $idx = $raw -as [int]
-    } while ($null -eq $idx -or $idx -lt 1 -or $idx -gt $models.Count)
-    return $models[$idx - 1]
+    return Read-SpectreSelection -Message "Wybierz model" -Choices $models
 }
 
 function Resolve-ModelId {
@@ -174,32 +168,25 @@ function Invoke-DroidExecModelRun {
         $droidArgs += @('--auto', $Auto)
     }
 
-    Write-Host "Start droid exec: model=$Model, mode=$Auto" -ForegroundColor Cyan
+    Write-SpectreHost "[cyan]Start droid exec: model=$Model, mode=$Auto[/]"
 
     $startedAt = Get-Date
     $rawOutput = $null
     $exitCode = 0
 
-    $spectreRunner = Get-Command Invoke-SpectreCommandWithStatus -ErrorAction SilentlyContinue
-    if ($null -ne $spectreRunner) {
-        $statusResult = Invoke-SpectreCommandWithStatus `
-            -Title "Droid review ($Model)" `
-            -Spinner "Dots" `
-            -ScriptBlock ({
-                $output = & droid @droidArgs 2>&1
-                return [pscustomobject]@{
-                    Output = $output
-                    ExitCode = $LASTEXITCODE
-                }
-            }.GetNewClosure())
+    $statusResult = Invoke-SpectreCommandWithStatus `
+        -Title "Droid review ($Model)" `
+        -Spinner "Dots" `
+        -ScriptBlock ({
+            $output = & droid @droidArgs 2>&1
+            return [pscustomobject]@{
+                Output = $output
+                ExitCode = $LASTEXITCODE
+            }
+        }.GetNewClosure())
 
-        $rawOutput = $statusResult.Output
-        $exitCode = [int]$statusResult.ExitCode
-    }
-    else {
-        $rawOutput = & droid @droidArgs 2>&1
-        $exitCode = $LASTEXITCODE
-    }
+    $rawOutput = $statusResult.Output
+    $exitCode = [int]$statusResult.ExitCode
 
     if ($exitCode -ne 0) {
         $errMsg = ($rawOutput | ForEach-Object { "$_" }) -join "`n"
@@ -221,13 +208,58 @@ function Invoke-DroidExecModelRun {
     }
 
     $elapsedSec = [Math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
-    Write-Host "Koniec droid exec: model=$Model, session=$($result.session_id), czas=${elapsedSec}s" -ForegroundColor Green
+    Write-SpectreHost "[green]Koniec droid exec: model=$Model, session=$($result.session_id), czas=${elapsedSec}s[/]"
 
     return [pscustomobject]@{
         Model = $Model
         SessionId = [string]$result.session_id
         Output = [string]$result.result
         DurationMs = if ($result.duration_ms) { [int]$result.duration_ms } else { $null }
+    }
+}
+
+function Invoke-GeminiRun {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PromptFilePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkingDirectory
+    )
+
+    Write-SpectreHost "[cyan]Start gemini CLI: cwd=$WorkingDirectory[/]"
+
+    $startedAt = Get-Date
+
+    $promptText = Get-Content -LiteralPath $PromptFilePath -Raw
+    
+    $statusResult = Invoke-SpectreCommandWithStatus `
+        -Title "Gemini CLI run" `
+        -Spinner "Dots" `
+        -ScriptBlock ({
+            $output = & gemini --skip-trust --approval-mode auto_edit --model auto --output-format json --prompt $promptText 2>&1
+            return [pscustomobject]@{
+                Output = $output
+                ExitCode = $LASTEXITCODE
+            }
+        }.GetNewClosure())
+
+    $output = $statusResult.Output | ConvertFrom-Json -ErrorAction Stop
+    $exitCode = $statusResult.ExitCode
+
+    if ($exitCode -ne 0) {
+        $errMsg = ($output | ForEach-Object { "$_" }) -join "`n"
+        throw "gemini CLI zakonczyl sie bledem: $errMsg"
+    }
+
+    $elapsedSec = [Math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
+    Write-SpectreHost "[green]Koniec gemini CLI: czas=${elapsedSec}s[/]"
+
+    return [pscustomobject]@{
+        SessionId = if ($output.session_id) { [string]$output.session_id } else { $null }
+        Output = $output.response
+        DurationMs = [int]((Get-Date) - $startedAt).TotalMilliseconds
     }
 }
 
@@ -272,10 +304,17 @@ function Invoke-Prompt {
         [ValidateSet('readonly', 'low', 'medium', 'high')]
         [string]$Auto = 'medium',
 
-        [switch]$ContinueInDroidShell,
+        [switch]$ContinueInAgentCLI,
 
-        [switch]$SkipCode
+        [switch]$SkipCode,
+
+        [string]$Runner = $(if ($env:ZTR_DEFAULT_RUNNER) { $env:ZTR_DEFAULT_RUNNER } else { 'droid' })
     )
+
+    if ([string]::IsNullOrWhiteSpace($env:ZTR_DEFAULT_RUNNER) -and -not $script:ZtrDefaultRunnerHintShown) {
+        Write-SpectreHost "[yellow]HINT: Obecnie Invoke-Prompt uzywa domyslnego runnera 'droid'. Mozesz przelaczyc sie na np. 'gemini' ustawiajac zmienna srodowiskowa `$env:ZTR_DEFAULT_RUNNER = 'gemini' w swoim profilu lub odpalajac setup.ps1.[/]"
+        $script:ZtrDefaultRunnerHintShown = $true
+    }
 
     if ([string]::IsNullOrWhiteSpace($Model)) {
         $Model = Select-ModelInteractive
@@ -290,8 +329,11 @@ function Invoke-Prompt {
         $promptText = ($promptText.TrimEnd() + "`n`nSwoje review do plikow zapisz po polsku")
     }
 
-    if ($null -eq (Get-Command droid -ErrorAction SilentlyContinue)) {
+    if ($Runner -eq 'droid' -and $null -eq (Get-Command droid -ErrorAction SilentlyContinue)) {
         throw "Brak komendy 'droid'."
+    }
+    if ($Runner -eq 'gemini' -and $null -eq (Get-Command gemini -ErrorAction SilentlyContinue)) {
+        throw "Brak komendy 'gemini'."
     }
 
     if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
@@ -304,17 +346,27 @@ function Invoke-Prompt {
         $reviewDirPath = Join-Path -Path $WorkingDirectory -ChildPath $PromptConfig.OutpuDirectory
         if (-not (Test-Path -LiteralPath $reviewDirPath -PathType Container)) {
             New-Item -Path $reviewDirPath -ItemType Directory -Force | Out-Null
-            Write-Host "Utworzono katalog review: $reviewDirPath" -ForegroundColor Cyan
+            Write-SpectreHost "[cyan]Utworzono katalog review: $(Esc $reviewDirPath)[/]"
         }
     }
 
-    Write-Host "Przygotowuje lokalny review: model=$Model ($modelId), mode=$Auto, cwd=$WorkingDirectory" -ForegroundColor Cyan
+    Write-SpectreHost "[cyan]Przygotowuje lokalny review: runner=$Runner, model=$Model ($modelId), mode=$Auto, cwd=$WorkingDirectory[/]"
 
     $tempPromptFile = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("local-review.{0}.md" -f ([Guid]::NewGuid().ToString('N')))
     Set-Content -LiteralPath $tempPromptFile -Value $promptText -Encoding UTF8
 
     try {
-        $run = Invoke-DroidExecModelRun -Model $modelId -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory -Auto $Auto
+        switch ($Runner.ToLower()) {
+            'droid' {
+                $run = Invoke-DroidExecModelRun -Model $modelId -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory -Auto $Auto
+            }
+            'gemini' {
+                $run = Invoke-GeminiRun -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory
+            }
+            default {
+                throw "Nieobslugiwany runner: '$Runner'. Obecnie wspierane to 'droid' i 'gemini'."
+            }
+        }
     }
     finally {
         if (Test-Path -LiteralPath $tempPromptFile -PathType Leaf) {
@@ -323,6 +375,7 @@ function Invoke-Prompt {
     }
 
     $result = [pscustomobject]@{
+        Runner = $Runner
         Model = $Model
         ModelId = $modelId
         Mode = $Auto
@@ -331,14 +384,18 @@ function Invoke-Prompt {
         DurationMs = $run.DurationMs
     }
 
+    Write-Host $run | ConvertTo-Json -Depth 10
+
     if (-not $SkipCode -and -not [string]::IsNullOrWhiteSpace($PromptConfig.ReviewDirectory)) {
         $reviewDirPath = Join-Path -Path $WorkingDirectory -ChildPath $PromptConfig.ReviewDirectory
         Get-ChildItem -LiteralPath $reviewDirPath -Filter '*.md' -File -ErrorAction SilentlyContinue |
             ForEach-Object { & code $_.FullName }
     }
 
-    if ($ContinueInDroidShell) {
+    if ($ContinueInAgentCLI -and $Runner -eq 'droid') {
         & droid --resume $run.SessionId
+    } elseif ($ContinueInAgentCLI -and $Runner -eq 'gemini') {
+        & gemini --resume $run.SessionId
     }
 
     return $result
