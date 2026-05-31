@@ -110,7 +110,7 @@ if (
             oh-my-posh init pwsh --config $ohMyPoshTheme | Invoke-Expression
         }
         else {
-            oh-my-posh init pwsh | Invoke-Expression
+            oh-my-posh init pwsh --config powerlevel10k_rainbow | Invoke-Expression
         }
     }
 }
@@ -119,7 +119,7 @@ if (
 # ===== PR and worktree helpers (MD.PrWorktreeTools) =====
 $prWorktreeModulePath = Join-Path -Path $PSScriptRoot -ChildPath "Modules/MD.PrWorktreeTools/MD.PrWorktreeTools.psm1"
 if (Test-Path -LiteralPath $prWorktreeModulePath -PathType Leaf) {
-    Import-Module $prWorktreeModulePath -Force
+    Import-Module $prWorktreeModulePath
 }
 else {
     Write-Host "Nie znaleziono modułu MD.PrWorktreeTools: $prWorktreeModulePath" -ForegroundColor Yellow
@@ -128,7 +128,7 @@ else {
 # ===== PR prompting helpers (MD.PrPromptingTools) =====
 $prPromptingModulePath = Join-Path -Path $PSScriptRoot -ChildPath "Modules/MD.PrPromptingTools/MD.PrPromptingTools.psm1"
 if (Test-Path -LiteralPath $prPromptingModulePath -PathType Leaf) {
-    Import-Module $prPromptingModulePath -Force
+    Import-Module $prPromptingModulePath
 }
 else {
     Write-Host "Nie znaleziono modułu MD.PrPromptingTools: $prPromptingModulePath" -ForegroundColor Yellow
