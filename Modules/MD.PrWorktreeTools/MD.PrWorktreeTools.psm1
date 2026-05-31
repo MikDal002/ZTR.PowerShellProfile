@@ -51,6 +51,17 @@ function Get-DefaultWorktreesRoot {
     return (Join-Path $parentDir "$repoName.worktrees")
 }
 
+function Invoke-Git {
+    param([string]$StepName, [string[]]$GitArgs)
+
+    $output = & git @GitArgs 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $errMsg = $output | ForEach-Object { "$_" } | Out-String
+        throw "Błąd podczas '$StepName':`n$($errMsg.Trim())"
+    }
+    return ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+}
+
 <#
 Resolve-RepoNameWithOwner:
 - domyślnie ustala repo w formacie 'owner/name' na podstawie bieżącego katalogu
@@ -566,17 +577,6 @@ function New-EmptyPrWorktree {
         }
     }
 
-    function Invoke-Git {
-        param([string]$StepName, [string[]]$GitArgs)
-
-        $output = & git @GitArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $errMsg = $output | ForEach-Object { "$_" } | Out-String
-            throw "Błąd podczas '$StepName':`n$($errMsg.Trim())"
-        }
-        return ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
-    }
-
     function Read-HostWithDefault {
         param(
             [Parameter(Mandatory = $true)]
@@ -789,16 +789,6 @@ function New-WorktreeForPr {
         }
     }
 
-    function Invoke-Git {
-        param([string]$StepName, [string[]]$GitArgs)
-
-        $output = & git @GitArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $errMsg = $output | ForEach-Object { "$_" } | Out-String
-            throw "Błąd podczas '$StepName':`n$($errMsg.Trim())"
-        }
-        return ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
-    }
 
     $ghExists = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
     $gitExists = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
@@ -926,16 +916,6 @@ function ConvertTo-PrWorktree {
         }
     }
 
-    function Invoke-Git {
-        param([string]$StepName, [string[]]$GitArgs)
-
-        $output = & git @GitArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $errMsg = $output | ForEach-Object { "$_" } | Out-String
-            throw "Błąd podczas '$StepName':`n$($errMsg.Trim())"
-        }
-        return ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
-    }
 
     $ghExists = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
     $gitExists = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
@@ -1175,16 +1155,6 @@ function New-DevWorktree {
         }
     }
 
-    function Invoke-Git {
-        param([string]$StepName, [string[]]$GitArgs)
-
-        $output = & git @GitArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $errMsg = $output | ForEach-Object { "$_" } | Out-String
-            throw "Błąd podczas '$StepName':`n$($errMsg.Trim())"
-        }
-        return ($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
-    }
 
     function Get-SanitizedBranchSegment {
         param([string]$Text)
