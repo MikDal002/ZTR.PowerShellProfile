@@ -46,6 +46,8 @@ function Get-PromptYouHateThisImplementation {
         Invoke-LocalReview. Pliki review lądują w katalogu .review/.
     .PARAMETER Branch
         Gałąź bazowa do porównania przez git diff (np. 'main').
+    .PARAMETER Scope
+        Zakres review do wstawienia do promptu (np. "Do a git diff" lub "Look at staged file(s)").
     .OUTPUTS
         PromptConfig
     .EXAMPLE
@@ -54,17 +56,18 @@ function Get-PromptYouHateThisImplementation {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Branch
+        [string]$Branch,
+        [string]$Scope =  "Do a git diff"
     )
 
     if ([string]::IsNullOrWhiteSpace($Branch)) {
-        throw "Parametr Branch nie moze byc pusty."
+        throw "Parametr Branch nie może byc pusty."
     }
 
     $templatePath = Get-PromptTemplatePath -TemplateName 'you-hate-this-implementation-md'
     $template = Get-Content -LiteralPath $templatePath -Raw -Encoding UTF8
 
-    return [PromptConfig]::new($template.Replace('{{baseBranch}}', $Branch.Trim()), '.review')
+    return [PromptConfig]::new($template.Replace('{{baseBranch}}', $Branch.Trim()).Replace('{{scope}}', $Scope.Trim()), '.review')
 }
 
 function Get-PromptImprovePendingReview {
