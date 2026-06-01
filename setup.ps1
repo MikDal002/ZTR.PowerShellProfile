@@ -88,7 +88,7 @@ elseif ($runnerChoice -eq 'gemini') {
 # Konfiguracja wymagania numeru ADO
 Write-Host "`n[Konfiguracja wymagania numeru ADO]" -ForegroundColor Cyan
 
-Write-SpectreHost "[bold]true (wymagane)[/]  - Galaz: [cyan]task/<ado>/<name>[/], tytul PR: [cyan][AB#<ado>] <name>[/]."
+Write-SpectreHost "[bold]true (wymagane)[/]  - Galaz: [cyan]task/<ado>/<name>[/], tytul PR: [cyan][[AB#<ado>]] <name>[/]."
 Write-SpectreHost "[bold]false (opcjonalne)[/] - Galaz: [cyan]devWorktree/<name>[/], tytul PR: [cyan]<name>[/]."
 Write-SpectreHost ""
 Write-SpectreHost "Brak konfiguracji → ADO domyslnie [cyan]wymagane[/] + jednorazowy HINT przy pierwszym wywolaniu."
