@@ -155,9 +155,9 @@ function gwlsscd {
     )
 
     $match = git worktree list `
+                | %{ $_.Trim() -split '\s+'  | Select-Object -First 1 } `
                 | Select-String -Pattern $Value `
-                | %{ $_.Line.Trim() -split '\s+' } `
-                | Select-Object -First 1 `
+                | Select-Object -First 1
                 
     if ($match) {
         $path = ($match -split '\s+')[0]
