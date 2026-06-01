@@ -70,15 +70,7 @@ function Get-PromptYouHateThisImplementation {
     $resolvedScope = $Scope.Trim()
     if ($resolvedScope.Contains('{{HEAD}}') -or $resolvedScope.Contains('{{current_branch}}')) {
         
-        $head = (& git merge-base HEAD '@{u}' 2>&1)
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
-            throw (
-                "Nie udało się ustalić bazowego commita. " +
-                "Ustaw upstream: git push -u origin <branch>, " +
-                "lub podaj zakres ręcznie przez parametr -Scope."
-            )    
-        }
-        $head = $head.Trim()
+        $head = "origin/HEAD"
         
         $currentBranch = (& git rev-parse --abbrev-ref HEAD 2>&1).Trim()
         
