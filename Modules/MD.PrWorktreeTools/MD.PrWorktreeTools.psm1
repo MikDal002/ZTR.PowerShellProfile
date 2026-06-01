@@ -1,3 +1,5 @@
+$script:ZtrAdoRequiredHintShown = $false
+
 function Get-DefaultWorktreesRoot {
     # Use git common dir so this resolves to the main repo even when run from a linked worktree.
     $gitCommonDir = $null
@@ -506,6 +508,68 @@ function Open-PrDirs {
     $summary | Format-SpectreTable -Color "Blue" -HeaderColor "Blue"
 }
 
+function Is-True($value) {
+    # Normalize the value to string for comparison
+    if ($null -eq $value) { return $false }
+
+    # Trim and lowercase for consistent matching
+    $strValue = "$value".Trim().ToLower()
+
+    # Acceptable "true" values
+    $trueValues = @("true", "yes", "1")
+
+    return $trueValues -contains $strValue
+}
+
+
+function Resolve-AdoNumber {
+    <#
+    .SYNOPSIS
+        Zwraca oczyszczony numer ADO lub $null.
+    .DESCRIPTION
+        Jeśli Value jest niepuste — czyści go (tylko cyfry) i zwraca.
+        Jeśli Value jest puste:
+          - ZTR_ADO_REQUIRED=false → zwraca $null
+          - ZTR_ADO_REQUIRED=true (lub brak zmiennej) → pyta interaktywnie
+            jeśli sesja jest interaktywna, w przeciwnym razie rzuca wyjątek.
+        Wyświetla HINT raz na sesję gdy ZTR_ADO_REQUIRED nie jest ustawiona.
+    #>
+    param(
+        [string]$Value,
+        [string]$Context = ''
+    )
+    
+    function Sanitaize-AdoNumber($input) {
+        $c = ($input -replace '[^0-9]', '')
+        return $c
+    }
+
+    if ($null -eq $env:ZTR_ADO_REQUIRED -and -not $script:ZtrAdoRequiredHintShown) {
+        Write-Host "HINT: Numer ADO jest domyslnie wymagany. Mozesz to zmienic ustawiajac `$env:ZTR_ADO_REQUIRED = 'false' lub uruchamiajac setup.ps1." -ForegroundColor Yellow
+        $script:ZtrAdoRequiredHintShown = $true
+    }
+
+    $adoRequired = Is-True $env:ZTR_ADO_REQUIRED
+
+    $Value = Sanitaize-AdoNumber $Value
+
+    if ([string]::IsNullOrWhiteSpace($Value) -and $adoRequired) {
+
+        $isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+        if (-not $isInteractive) {
+            throw "Numer ADO jest wymagany (ZTR_ADO_REQUIRED=true), ale sesja nie jest interaktywna."
+        }
+
+        $prompt = "Podaj numer ADO" + $(if ($Context) { " (kontekst: $Context)" } else { "" })
+        $raw = Read-Host $prompt
+        if ([string]::IsNullOrWhiteSpace($raw)) { throw "Numer ADO nie moze byc pusty." }
+
+        $Value = Sanitaize-AdoNumber $raw
+        if ([string]::IsNullOrWhiteSpace($Value)) { throw "Numer ADO musi zawierac cyfry." }
+    }
+
+    return $Value
+}
 
 <#
 .SYNOPSIS
@@ -631,21 +695,11 @@ function New-EmptyPrWorktree {
 
     # ---- Input ----
     $adoNumber = Read-HostWithDefault -Prompt "Podaj numer ADO" -DefaultValue $adoNumber
+    $adoNumberClean = Resolve-AdoNumber -Value $adoNumber
     $shortName = Read-HostWithDefault -Prompt "Podaj krótką nazwę" -DefaultValue $shortName
-
-    if ([string]::IsNullOrWhiteSpace($adoNumber)) {
-        throw "Numer ADO nie może być pusty."
-    }
 
     if ([string]::IsNullOrWhiteSpace($shortName)) {
         throw "Krótka nazwa nie może być pusta."
-    }
-
-    # Tylko cyfry do numeru ADO
-    $adoNumberClean = ($adoNumber -replace '[^0-9]', '')
-
-    if ([string]::IsNullOrWhiteSpace($adoNumberClean)) {
-        throw "Numer ADO musi zawierać cyfry."
     }
 
     $shortNameClean = Normalize-ShortName $shortName
@@ -654,7 +708,8 @@ function New-EmptyPrWorktree {
         throw "Po normalizacji krótka nazwa jest pusta."
     }
 
-    $branchName = "task/$adoNumberClean/$shortNameClean"
+    $branchName = if ($adoNumberClean) { "task/$adoNumberClean/$shortNameClean" } else { "devWorktree/$shortNameClean" }
+    $prTitle    = if ($adoNumberClean) { "[AB#$adoNumberClean] $shortName" } else { $shortName }
 
     Write-Host ""
     Write-Host "Tworzę branch bez checkouta i bez worktree..." -ForegroundColor Cyan
@@ -710,7 +765,7 @@ function New-EmptyPrWorktree {
     $prUrl = gh pr create `
         --base $targetBranch `
         --head $branchName `
-        --title "[AB#$adoNumberClean] $shortName" `
+        --title $prTitle `
         --body "Auto-generated draft for PR about '$shortName'." `
         --draft
     Check-LastExitCode "create draft PR"
@@ -971,12 +1026,11 @@ function ConvertTo-PrWorktree {
     }
 
     # ---- Extract ADO number from branch name (best-effort) ----
-    $adoNumber = $null
-    if ($branchName -match 'task/(\d+)') {
-        $adoNumber = $Matches[1]
-    } elseif ($branchName -match '(\d{3,})') {
-        $adoNumber = $Matches[1]
-    }
+    $adoExtracted = $null
+    if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
+    elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
+
+    $adoNumber = Resolve-AdoNumber -Value $adoExtracted -Context $branchName
 
     # ---- Build title/body from last commit on the branch ----
     $commitSubject = (& git -C $worktreeRoot log -1 --format=%s 2>$null | Out-String).Trim()
@@ -1165,13 +1219,7 @@ function New-DevWorktree {
     & git rev-parse --is-inside-work-tree *> $null
     Check-LastExitCode "verify git repository"
 
-    $adoNumberClean = $null
-    if (-not [string]::IsNullOrWhiteSpace($AdoNumber)) {
-        $adoNumberClean = ($AdoNumber -replace '[^0-9]', '')
-        if ([string]::IsNullOrWhiteSpace($adoNumberClean)) {
-            throw "Numer ADO musi zawierać cyfry."
-        }
-    }
+    $adoNumberClean = Resolve-AdoNumber -Value $AdoNumber
 
     if ([string]::IsNullOrWhiteSpace($BranchName)) {
         $prompt = if ($adoNumberClean) { "Podaj krótką nazwę" } else { "Podaj nazwę gałęzi" }

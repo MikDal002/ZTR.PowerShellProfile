@@ -85,5 +85,30 @@ elseif ($runnerChoice -eq 'gemini') {
     Write-SpectreHost "[green]Ustawiono 'gemini' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
 }
 
+# Konfiguracja wymagania numeru ADO
+Write-Host "`n[Konfiguracja wymagania numeru ADO]" -ForegroundColor Cyan
+
+Write-SpectreHost "[bold]true (wymagane)[/]  - Galaz: [cyan]task/<ado>/<name>[/], tytul PR: [cyan][AB#<ado>] <name>[/]."
+Write-SpectreHost "[bold]false (opcjonalne)[/] - Galaz: [cyan]devWorktree/<name>[/], tytul PR: [cyan]<name>[/]."
+Write-SpectreHost ""
+Write-SpectreHost "Brak konfiguracji → ADO domyslnie [cyan]wymagane[/] + jednorazowy HINT przy pierwszym wywolaniu."
+
+$adoChoices = @("true (wymagane)", "false (opcjonalne)", "Pomiń ustawianie")
+$adoChoice = Read-SpectreSelection -Message "Czy numer ADO ma być wymagany?" -Choices $adoChoices
+
+if ($adoChoice -eq 'Pomiń ustawianie') {
+    Write-SpectreHost "[grey]Pominięto. Możesz to ustawić później przez `$env:ZTR_ADO_REQUIRED = 'true'/'false'.[/]"
+}
+elseif ($adoChoice -eq 'true (wymagane)') {
+    [Environment]::SetEnvironmentVariable('ZTR_ADO_REQUIRED', 'true', 'User')
+    $env:ZTR_ADO_REQUIRED = 'true'
+    Write-SpectreHost "[green]Ustawiono ADO jako wymagane (ZTR_ADO_REQUIRED=true).[/]"
+}
+elseif ($adoChoice -eq 'false (opcjonalne)') {
+    [Environment]::SetEnvironmentVariable('ZTR_ADO_REQUIRED', 'false', 'User')
+    $env:ZTR_ADO_REQUIRED = 'false'
+    Write-SpectreHost "[green]Ustawiono ADO jako opcjonalne (ZTR_ADO_REQUIRED=false).[/]"
+}
+
 Write-Host "`nPamiętaj, aby zrestartować terminal po instalacji nowych narzędzi, aby zmiany w PATH weszły w życie." -ForegroundColor Yellow
 
