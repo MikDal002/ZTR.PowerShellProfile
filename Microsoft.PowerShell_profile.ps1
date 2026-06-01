@@ -17,12 +17,11 @@ Maintenance rules:
 - zmiany powinny byc wersjonowane w repo Git, a nie utrzymywane tylko lokalnie
 
 Recommended evolution path:
-1. Utworzyc prywatne repo, np. powershell-profile lub dotfiles.
-2. Zostawic ten plik jako loader konfiguracji z repo.
-3. Rozdzielic kod na obszary, np. shell, completions, aliases, git, worktrees.
-4. Wydzielic bardziej zlozone funkcje do modulow .psm1.
-5. Dodac README z opisem setupu, zaleznosci i konwencji.
-6. Dodac testy Pester dla logiki, ktora buduje nazwy branchy lub wykonuje automatyzacje git/gh.
+1. Zostawic ten plik jako loader konfiguracji z repo.
+2. Rozdzielic kod na obszary, np. shell, completions, aliases, git, worktrees.
+3. Wydzielic bardziej zlozone funkcje do modulow .psm1.
+4. Dodac README z opisem setupu, zaleznosci i konwencji.
+5. Dodac testy Pester dla logiki, ktora buduje nazwy branchy lub wykonuje automatyzacje git/gh.
 
 Suggested structure:
 - profile/bootstrap.ps1

@@ -43,7 +43,7 @@ function Get-PromptYouHateThisImplementation {
     .DESCRIPTION
         Ładuje template you-hate-this-implementation-md.md i wstawia
         podaną gałąź bazową. Wynikowy PromptConfig trafia do
-        Invoke-LocalReview. Pliki review lądują w katalogu .review/.
+        Invoke-Prompt. Pliki review lądują w katalogu .review/.
     .PARAMETER Branch
         Gałąź bazowa do porównania przez git diff (np. 'main').
     .PARAMETER Scope
@@ -271,10 +271,11 @@ function Invoke-Prompt {
     .SYNOPSIS
         Uruchamia droid exec z podanym promptem i modelem AI.
     .DESCRIPTION
-        Przyjmuje PromptConfig z Get-Prompt*, zapisuje prompt do
-        pliku tymczasowego, wywołuje droid exec i zwraca wynik sesji.
+        Przyjmuje PromptConfig z Get-Prompt*, zapisuje prompt do pliku tymczasowego,
+        wywołuje wybrany runner (droid exec lub gemini CLI, zależnie od parametru
+        Runner / zmiennej $env:ZTR_DEFAULT_RUNNER) i zwraca wynik sesji.
         Jeśli PromptConfig.OutpuDirectory jest niepuste, katalog jest
-        tworzony przed uruchomieniem droids — agent zapisze tam pliki .md.
+        tworzony przed uruchomieniem Runnera — agent zapisze tam pliki .md.
     .PARAMETER PromptConfig
         Obiekt PromptConfig zwrócony przez Get-Prompt*.
     .PARAMETER Polish
@@ -284,13 +285,14 @@ function Invoke-Prompt {
     .PARAMETER WorkingDirectory
         Katalog roboczy przekazywany do droid exec (--cwd). Domyślnie bieżący.
     .PARAMETER Auto
-        Poziom autonomii droids: readonly, low, medium (domyślny), high.
+        Poziom autonomii droid exec: readonly, low, medium (domyślny), high.
+        Parametr ignorowany gdy Runner='gemini'.
     .OUTPUTS
-        PSCustomObject z polami: Model, ModelId, Mode, SessionId, Output, DurationMs.
+        PSCustomObject z polami: Runner, Model, ModelId, Mode, SessionId, Output, DurationMs.
     .EXAMPLE
         Get-PromptYouHateThisImplementation -Branch main | Invoke-Prompt -Model Sonnet
     .EXAMPLE
-        Get-PromptImprovePendingReview | Invoke-LocalReview -Model Gemini -Polish -Auto high
+        Get-PromptImprovePendingReview | Invoke-Prompt -Model Gemini -Polish -Auto high
     #>
     [CmdletBinding()]
     param(
@@ -404,4 +406,4 @@ function Invoke-Prompt {
     return $result
 }
 
-Export-ModuleMember -Function Get-PromptYouHateThisImplementation, Get-PromptImprovePendingReview, Invoke-Prompt, Invoke-YouHateThisImplementationFlow
+Export-ModuleMember -Function Get-PromptYouHateThisImplementation, Get-PromptImprovePendingReview, Invoke-Prompt

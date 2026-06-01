@@ -106,6 +106,7 @@ Open-PrDirs:
   (żadna akcja, w tym otwarcie strony, nie zostanie na nich uruchomiona),
 - -Remove: akcja uruchamiana per pozostały element PO otwarciu strony PR-a
   (pyta o potwierdzenie usunięcia worktree),
+- -SkipBrowser: pomija otwieranie strony PR-a w przeglądarce; akcja Remove jest nadal wykonywana,
 - -Force: używane razem z -Remove; dodaje --force do `git worktree remove`,
 - gdy nie uda się otworzyć strony PR-a lub usunąć worktree, pyta gdzie otworzyć
   katalog worktree: Eksplorator, VS Code (`code`), albo nic.
@@ -1075,12 +1076,13 @@ function ConvertTo-PrWorktree {
 
 <#
 .SYNOPSIS
-Tworzy pusty roboczy worktree z gałęzi `origin/development`.
+Tworzy pusty roboczy worktree od domyślnej gałęzi origin (origin/HEAD).
 
 .DESCRIPTION
 Skrót na `git worktree add` z ustalonymi domyślnymi wartościami:
-- bazą zawsze jest `origin/development` (po `git fetch origin`),
-- gałąź jest tworzona lokalnie pod podaną nazwą (jeśli nie istnieje),
+- bazą jest domyślna gałąź origin (origin/HEAD, po `git fetch origin`),
+- gdy `-AdoNumber` nie jest podany, gałąź jest tworzona jako `devWorktree/<normalizedBranchName>`;
+  gdy `-AdoNumber` jest podany, jako `task/<adoNumber>/<normalizedBranchName>`,
 - katalog worktree powstaje w `{repo}.worktrees\<sanitized-branch>`,
 - po utworzeniu funkcja przełącza bieżącą lokalizację do nowego worktree.
 
@@ -1101,9 +1103,9 @@ jako krótka nazwa (np. "Fix tax mapping" -> `task/123456/fix-tax-mapping`).
 .EXAMPLE
 New-DevWorktree
 
-Zapyta o nazwę gałęzi (np. `task/123456/foo-bar`) i utworzy worktree
-`{repo}.worktrees\task-123456-foo-bar` z gałęzią o tej nazwie pochodzącą
-od `origin/development`.
+Zapyta o nazwę gałęzi (np. `quick-fix`) i utworzy worktree
+`{repo}.worktrees\devWorktree-quick-fix` z gałęzią `devWorktree/quick-fix` pochodzącą
+od `origin/HEAD` (domyślna gałąź remote).
 
 .EXAMPLE
 New-DevWorktree -BranchName task/123/quick-fix
@@ -1114,10 +1116,10 @@ Utworzy worktree od razu, bez pytania.
 New-DevWorktree -AdoNumber 123456
 
 Zapyta o krótką nazwę (np. "Fix tax mapping") i utworzy gałąź
-`task/123456/fix-tax-mapping` od `origin/development`.
+`task/123456/fix-tax-mapping` od `origin/HEAD` (domyślna gałąź remote).
 
 .NOTES
-Wymagania: aktywne repozytorium git, gałąź `origin/development`, push nie
+Wymagania: aktywne repozytorium git, skonfigurowany `origin/HEAD` (domyślna gałąź remote), push nie
 jest wykonywany — gałąź pozostaje lokalna do czasu pierwszego pusha.
 #>
 function New-DevWorktree {
