@@ -41,33 +41,57 @@ function Get-PromptYouHateThisImplementation {
     .SYNOPSIS
         Buduje prompt do review w stylu „nienawidzę tej implementacji".
     .DESCRIPTION
-        Ładuje template you-hate-this-implementation-md.md i wstawia
-        podaną gałąź bazową. Wynikowy PromptConfig trafia do
-        Invoke-Prompt. Pliki review lądują w katalogu .review/.
-    .PARAMETER Branch
-        Gałąź bazowa do porównania przez git diff (np. 'main').
+        Ładuje template you-hate-this-implementation-md.md,
+        dynamicznie rozwiązuje placeholdery {{HEAD}}
+        i {{current_branch}} na podstawie bieżącego repozytorium
+        git, a następnie wstawia wynikowy zakres do promptu.
+        Wynikowy PromptConfig trafia do Invoke-Prompt.
+        Pliki review lądują w katalogu .review/.
     .PARAMETER Scope
+        Domyślnie "Do a `git diff {{HEAD}}...{{current_branch}}`".
         Zakres review do wstawienia do promptu (np. "Do a git diff" lub "Look at staged file(s)").
+        Inny interesujacy przykład to "Do a `git diff --cached`" aby sprwadzić tylko i wyłącznie zmiany staged. 
+
+        Wartości jak {{HEAD}} i {{current_branch}} w Scope są zastępowane odpowiednimi wartościami z repozytorium git.
     .OUTPUTS
         PromptConfig
     .EXAMPLE
-        Get-PromptYouHateThisImplementation -Branch main | Invoke-Prompt -Model Sonnet
+        Get-PromptYouHateThisImplementation | Invoke-Prompt -Model Sonnet
+    .EXAMPLE
+        Get-PromptYouHateThisImplementation `
+            -Scope "Do a ``git diff --cached``" |
+            Invoke-Prompt -Model Sonnet
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Branch,
-        [string]$Scope =  "Do a git diff"
+        [string]$Scope =  "Do a ``git diff {{HEAD}}...{{current_branch}}``"
     )
 
-    if ([string]::IsNullOrWhiteSpace($Branch)) {
-        throw "Parametr Branch nie może byc pusty."
+    $resolvedScope = $Scope.Trim()
+    if ($resolvedScope.Contains('{{HEAD}}') -or $resolvedScope.Contains('{{current_branch}}')) {
+        
+        $head = (& git merge-base HEAD '@{u}' 2>&1)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
+            throw (
+                "Nie udało się ustalić bazowego commita. " +
+                "Ustaw upstream: git push -u origin <branch>, " +
+                "lub podaj zakres ręcznie przez parametr -Scope."
+            )    
+        }
+        $head = $head.Trim()
+        
+        $currentBranch = (& git rev-parse --abbrev-ref HEAD 2>&1).Trim()
+        
+        $resolvedScope = $resolvedScope.Replace('{{HEAD}}', $head)
+        $resolvedScope = $resolvedScope.Replace('{{current_branch}}', $currentBranch)
     }
 
     $templatePath = Get-PromptTemplatePath -TemplateName 'you-hate-this-implementation-md'
     $template = Get-Content -LiteralPath $templatePath -Raw -Encoding UTF8
 
-    return [PromptConfig]::new($template.Replace('{{baseBranch}}', $Branch.Trim()).Replace('{{scope}}', $Scope.Trim()), '.review')
+    $prompt = $template.Replace('{{scope}}', $resolvedScope)
+
+    return [PromptConfig]::new($prompt, '.review')
 }
 
 function Get-PromptImprovePendingReview {

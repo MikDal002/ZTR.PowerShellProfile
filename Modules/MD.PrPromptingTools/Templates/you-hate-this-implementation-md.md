@@ -1,4 +1,4 @@
-{{scope}} and pretend you're a senior dev doing a code review from current branch against the `{{baseBranch}}` branch, and you HATE this implementation. What would you criticize? What edge cases am I missing? 
+{{scope}} and pretend you're a senior dev doing a code review, and you HATE this implementation. What would you criticize? What edge cases am I missing? 
  
 Every comment write to separate {number}-{slug}.md file. under /.review/ folder. Number is just a next unique number, like a local id.
  
