@@ -64,6 +64,8 @@ function Check-LastExitCode {
 function Invoke-Git {
     param([string]$StepName, [string[]]$GitArgs)
 
+    Write-Debug "Running git command: git $($GitArgs -join ' ')"
+
     $output = & git @GitArgs 2>&1
     if ($LASTEXITCODE -ne 0) {
         $errMsg = $output | ForEach-Object { "$_" } | Out-String
@@ -969,6 +971,7 @@ function ConvertTo-PrWorktree {
     }
 
     $WorktreePath = (Resolve-Path -LiteralPath $WorktreePath).Path
+    Write-Debug "Resolved worktree path: $WorktreePath"
 
     & git -C $WorktreePath rev-parse --is-inside-work-tree *> $null
     Check-LastExitCode "verify git repository at $WorktreePath"
@@ -985,6 +988,7 @@ function ConvertTo-PrWorktree {
         throw "Nie udało się ustalić głównego katalogu repozytorium."
     }
     $mainRepoRoot = Split-Path -Path $gitCommonDir -Parent
+    Write-Debug "Resolved main repository root: $mainRepoRoot"
 
     # ---- Check gh auth ----
     & gh auth status *> $null
@@ -1018,14 +1022,22 @@ function ConvertTo-PrWorktree {
 
     # ---- Extract ADO number from branch name (best-effort) ----
     $adoExtracted = $null
-    if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
-    elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
-    
+    if ($AdoNumber) {
+        $adoExtracted = $AdoNumber
+        Write-Debug "Using ADO number from parameter: $adoExtracted"
+    } else {
+        if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
+        elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
+        Write-Debug "Extracted ADO number from branch name: $adoExtracted"
+    }
+
     $adoNumber = Resolve-AdoNumber -Value $adoExtracted -Context $branchName
+    Write-Debug "Resolved ADO number: $adoNumber"
 
     # ---- Push branch if not on origin (or if local is ahead) ----
     & git ls-remote --exit-code --heads origin $branchName *> $null
     $remoteExists = ($LASTEXITCODE -eq 0)
+    Write-Debug "Remote branch exists: $remoteExists"
 
     if (-not $remoteExists) {
         if ($adoNumber) {
