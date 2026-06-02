@@ -928,8 +928,8 @@ lokalizacja (PWD), o ile znajduje się wewnątrz worktree.
 Nazwa gałęzi bazowej (na origin), do której zostanie utworzony PR.
 Domyślnie `development`.
 
-.PARAMETER Draft
-Tworzy PR jako draft. Domyślnie PR powstaje jako gotowy do review.
+.PARAMETER NotDraft
+Tworzy PR jako gotowy do review. Domyślnie PR powstaje jako draft.
 
 .EXAMPLE
 ConvertTo-PrWorktree
@@ -940,9 +940,9 @@ do `development`, a następnie przeniesie worktree do
 `{repo}.worktrees\pr-<numerPR>` i przełączy tam lokalizację.
 
 .EXAMPLE
-ConvertTo-PrWorktree -WorktreePath D:\repos\foo.worktrees\hotfix-x -TargetBranch main -Draft
+ConvertTo-PrWorktree -WorktreePath D:\repos\foo.worktrees\hotfix-x -TargetBranch main -NotDraft
 
-Tworzy draft PR do `main` z worktree spod podanej ścieżki.
+Tworzy PR gotowy do review do `main` z worktree spod podanej ścieżki.
 
 .NOTES
 Wymagania: aktywne repozytorium git, dostępne narzędzia `git` i `gh`,
@@ -954,7 +954,7 @@ function ConvertTo-PrWorktree {
         [string] $WorktreePath = (Get-Location).Path,
         [string] $TargetBranch = "development",
         [string] $AdoNumber,
-        [switch] $Draft
+        [switch] $NotDraft
     )
 
     $ErrorActionPreference = "Stop"
@@ -1046,7 +1046,7 @@ function ConvertTo-PrWorktree {
             Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/$branchName")
         }
     } else {
-            Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin')
+            Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin', 'HEAD')
         
     }
 
@@ -1073,7 +1073,7 @@ function ConvertTo-PrWorktree {
     Write-Host "Base:      $TargetBranch"
     Write-Host "ADO #:     $(if ($adoNumber) { $adoNumber } else { '(brak — pomijam prefiks AB#)' })"
     Write-Host "Title:     $title"
-    Write-Host "Draft:     $($Draft.IsPresent)"
+    Write-Host "NotDraft:     $($NotDraft.IsPresent)"
     Write-Host ""
 
     # ---- Create PR ----
@@ -1084,7 +1084,7 @@ function ConvertTo-PrWorktree {
         '--title', $title,
         '--body',  $body
     )
-    if ($Draft) { $prArgs += '--draft' }
+    if (-not $NotDraft) { $prArgs += '--draft' }
 
     $prUrl = & gh @prArgs
     Check-LastExitCode "create PR"
