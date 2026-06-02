@@ -951,6 +951,7 @@ function ConvertTo-PrWorktree {
     param(
         [string] $WorktreePath = (Get-Location).Path,
         [string] $TargetBranch = "development",
+        [string] $AdoNumber,
         [switch] $Draft
     )
 
@@ -1015,22 +1016,28 @@ function ConvertTo-PrWorktree {
         throw "Dla gałęzi '$branchName' istnieje już otwarty PR #$existingPr."
     }
 
+    # ---- Extract ADO number from branch name (best-effort) ----
+    $adoExtracted = $null
+    if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
+    elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
+    
+    $adoNumber = Resolve-AdoNumber -Value $adoExtracted -Context $branchName
+
     # ---- Push branch if not on origin (or if local is ahead) ----
     & git ls-remote --exit-code --heads origin $branchName *> $null
     $remoteExists = ($LASTEXITCODE -eq 0)
 
     if (-not $remoteExists) {
-        Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/$branchName")
+        if ($adoNumber) {
+            Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/task/${adoNumber}/$branchName")
+        } else {
+            Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/$branchName")
+        }
     } else {
-        Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin', "refs/heads/${branchName}:refs/heads/$branchName")
+            Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin')
+        
     }
 
-    # ---- Extract ADO number from branch name (best-effort) ----
-    $adoExtracted = $null
-    if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
-    elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
-
-    $adoNumber = Resolve-AdoNumber -Value $adoExtracted -Context $branchName
 
     # ---- Build title/body from last commit on the branch ----
     $commitSubject = (& git -C $worktreeRoot log -1 --format=%s 2>$null | Out-String).Trim()
