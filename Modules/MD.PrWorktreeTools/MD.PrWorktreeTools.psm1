@@ -539,8 +539,8 @@ function Resolve-AdoNumber {
         [string]$Context = ''
     )
     
-    function Sanitaize-AdoNumber($input) {
-        $c = ($input -replace '[^0-9]', '')
+    function Sanitize-AdoNumber($value) {
+        $c = ($value -replace '[^0-9]', '')
         return $c
     }
 
@@ -550,8 +550,8 @@ function Resolve-AdoNumber {
     }
 
     $adoRequired = Is-True $env:ZTR_ADO_REQUIRED
-
-    $Value = Sanitaize-AdoNumber $Value
+    
+    $Value = Sanitize-AdoNumber $Value
 
     if ([string]::IsNullOrWhiteSpace($Value) -and $adoRequired) {
 
@@ -564,7 +564,7 @@ function Resolve-AdoNumber {
         $raw = Read-Host $prompt
         if ([string]::IsNullOrWhiteSpace($raw)) { throw "Numer ADO nie moze byc pusty." }
 
-        $Value = Sanitaize-AdoNumber $raw
+        $Value = Sanitize-AdoNumber $raw
         if ([string]::IsNullOrWhiteSpace($Value)) { throw "Numer ADO musi zawierac cyfry." }
     }
 
