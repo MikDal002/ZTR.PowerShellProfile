@@ -167,6 +167,44 @@ function gwlsscd {
     }
 }
 
+# Aliases for proper Select-String alias to start training the muscle memory
+Set-Alias gwlsls gwlss
+Set-Alias gwlslscd gwlsscd
+
+function tgit {
+    <#
+    .SYNOPSIS
+    Uruchamia TortoiseGitProc.exe z przekazanymi argumentami.
+
+    .DESCRIPTION
+    Funkcja jest cienkim wrapperem na TortoiseGitProc.exe /command.
+    Wszystkie argumenty podane po `tgit` są przekazywane dalej bez zmian,
+    więc możesz używać jej do dowolnych akcji obsługiwanych przez TortoiseGit,
+    na przykład `log`, `commit`, `push` albo `pull`.
+
+    .PARAMETER Args
+    Lista argumentów przekazywana bezpośrednio do TortoiseGitProc.exe.
+
+    .EXAMPLE
+    tgit log
+    Otwiera okno logu TortoiseGit dla bieżącego repozytorium.
+
+    .EXAMPLE
+    tgit commit
+    Otwiera okno tworzenia commita w TortoiseGit.
+
+    .EXAMPLE
+    tgit push
+    Uruchamia operację push z TortoiseGit.
+    #>
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Args
+    )
+
+    TortoiseGitProc /command @Args
+}
+
 # ===== Machine-specific / private shortcuts =====
 # Private and work-specific shortcuts (e.g. repo aliases) live in the loader at the
 # $PROFILE location, which dot-sources this profile and is not part of this repo.
