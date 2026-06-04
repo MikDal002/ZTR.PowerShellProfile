@@ -1,56 +1,42 @@
 $script:ZtrAdoRequiredHintShown = $false
 
-function Get-DefaultWorktreesRoot {
-    # Use git common dir so this resolves to the main repo even when run from a linked worktree.
-    $gitCommonDir = $null
+function Get-MainRepoPath {
+    Write-Debug "Get-MainRepoPath: Invoked in directory: $(Get-Location)"
 
-    $tryPaths = @(
-        @('rev-parse', '--path-format=absolute', '--git-common-dir'),
-        @('rev-parse', '--git-common-dir')
-    )
-
-    foreach ($gitArgs in $tryPaths) {
-        $output = & git @gitArgs 2>&1
-        $code   = $LASTEXITCODE
-        if ($code -eq 0) {
-            $first = $output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | Select-Object -First 1
-            if (-not [string]::IsNullOrWhiteSpace($first)) {
-                $gitCommonDir = "$first".Trim()
-                break
-            }
+    $gitCommonDir = (& git rev-parse --path-format=absolute --git-common-dir 2>$null | Select-Object -First 1)
+    if (-not [string]::IsNullOrWhiteSpace($gitCommonDir)) {
+        $gitCommonDir = $gitCommonDir.Trim()
+        if (Test-Path -LiteralPath $gitCommonDir) {
+            return Split-Path -Path $gitCommonDir -Parent
         }
     }
 
-    if ([string]::IsNullOrWhiteSpace($gitCommonDir)) {
+    throw "Nie udało się ustalić głównego katalogu repozytorium. Uruchom komendę w repo lub podaj ścieżkę jawnie."
+}
+
+function Get-DefaultWorktreesRoot {
+    $repoRoot = Get-MainRepoPath
+
+    if ([string]::IsNullOrWhiteSpace($repoRoot)) {
         throw "Nie udało się ustalić głównego katalogu repozytorium. Uruchom komendę w repo lub podaj ścieżkę jawnie."
     }
 
-    if (-not [System.IO.Path]::IsPathRooted($gitCommonDir)) {
+    if (-not [System.IO.Path]::IsPathRooted($repoRoot)) {
         try {
-            $gitCommonDir = (Resolve-Path -LiteralPath $gitCommonDir -ErrorAction Stop).Path
+            $repoRoot = (Resolve-Path -LiteralPath $repoRoot -ErrorAction Stop).Path
         }
         catch {
-            $gitCommonDir = [System.IO.Path]::GetFullPath($gitCommonDir)
+            $repoRoot = [System.IO.Path]::GetFullPath($repoRoot)
         }
     }
 
-    if (-not (Test-Path -LiteralPath $gitCommonDir)) {
-        throw "Katalog git-common-dir nie istnieje: $gitCommonDir"
+    if (-not (Test-Path -LiteralPath $repoRoot)) {
+        throw "Katalog git-common-dir nie istnieje: $repoRoot"
     }
 
-    $repoRoot = Split-Path -Path $gitCommonDir -Parent
-    if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-        throw "Nie udało się ustalić głównego katalogu repozytorium na podstawie git-common-dir: $gitCommonDir"
-    }
-
-    $parentDir = Split-Path -Path $repoRoot -Parent
-    $repoName = Split-Path -Path $repoRoot -Leaf
-
-    if ([string]::IsNullOrWhiteSpace($parentDir) -or [string]::IsNullOrWhiteSpace($repoName)) {
-        throw "Nie udało się wyliczyć katalogu '{repo}.worktrees' dla repo: $repoRoot"
-    }
-
-    return (Join-Path $parentDir "$repoName.worktrees")
+    $worktreesRoot = "$repoRoot.worktrees"
+    Write-Debug "Resolved worktrees root: $worktreesRoot"
+    return $worktreesRoot
 }
 
 function Check-LastExitCode {
@@ -83,20 +69,148 @@ Resolve-RepoNameWithOwner:
 function Resolve-RepoNameWithOwner {
     [CmdletBinding()]
     param()
+    Write-Debug "Resolve-RepoNameWithOwner: In directory $(Get-Location)"
+    
+    $nwo = & gh repo view --json nameWithOwner --jq '.nameWithOwner' | Select-Object -First 1
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($nwo)) {
+        return $nwo.Trim()
+    } else {
+        throw "Nie podano repozytorium (owner/name)."
+    }
+}
 
-    if ($null -ne (Get-Command gh -ErrorAction SilentlyContinue)) {
-        $nwo = & gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null | Select-Object -First 1
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($nwo)) {
-            return $nwo.Trim()
+function Get-AllWorktrees {
+    [CmdletBinding()]
+    param(
+        [string]$RepoPath
+    )
+    
+    $worktrees = @()
+    $current = @{}
+    $count = 0;
+
+    git worktree list --porcelain | ForEach-Object {
+        if ($_ -eq "") {
+            if ($current.Count -gt 0) {
+                $current.ToMove = $false
+                $current.PrNumber = $null
+
+                $worktrees += [PSCustomObject]($current)
+                $current = @{}
+            }
+        } elseif ($_.StartsWith("worktree")) { 
+            $current.Path = $_.Split(" ")[1]
+            if ($count -eq 0) {
+                $current.IsMain = $true
+            }
+            else {
+                $current.IsMain = $false
+            }
+        }
+        elseif ($_.StartsWith("branch")) { 
+            $current.Branch = $_.Split(" ")[1]
+        }
+        else {
+            Write-Debug "Skipping $_"
+        }
+
+        $count += 1;
+    }
+    
+    Write-Debug "Get-AllWorktrees: Parsed worktrees: $($worktrees | Format-List | Out-String)"
+
+    return ConvertTo-Json $worktrees | ConvertFrom-Json
+}
+
+function Rename-WorktreesDirectories {
+    [CmdletBinding()]
+    param(
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        $Path = Get-Location
+    } else {
+        Set-Location -Path $Path
+    }
+    
+    $MainRepoPath = Get-MainRepoPath
+
+    Set-Location $MainRepoPath
+
+    $worktrees = Get-AllWorktrees -RepoPath $MainRepoPath
+
+    $mainWorktree = $worktrees | Where-Object { $_.IsMain } | Select-Object -First 1
+    Write-Debug "Main worktree: $($mainWorktree.Path)"
+    Write-Host "${ConvertTo-Json $worktrees -Depth 5}"
+
+    $workTreeDirectory = Get-DefaultWorktreesRoot
+    $workTreeDirectory = $workTreeDirectory.Replace("\", "/")
+    Write-Debug "Normalized (\ -> /) worktree directory: $($workTreeDirectory)"
+
+    foreach ($wt in $worktrees) {
+        try {
+            if ($wt.IsMain) { continue }
+
+            Push-Location $wt.Path
+
+            $wt.PrNumber = gh pr view --json number 
+                            | ConvertFrom-Json 2>$null 
+                            | Select-Object -ExpandProperty number 2>$null
+
+            Write-Host "Worktree: $($wt.Path)"
+            if (-not $wt.PrNumber) {
+                Write-Host "`tdoes not seem to be associated with a PR (gh pr view failed), skipping." -ForegroundColor Gray
+                continue;
+            }
+            else {
+                Write-Host "'$($wt.Path)'"
+                Write-Host "`tis associated with PR #$($wt.PrNumber)." -ForegroundColor Green
+            }
+
+            if (-not ($wt.Path -like "$workTreeDirectory*")) {
+                $wt.ToMove = $true
+                Write-Host "`tis in incorrect root location" -ForegroundColor Yellow
+            }
+            else {
+                Write-Host "`tis in correct root location" -ForegroundColor Green
+            }
+
+            if (-not ($wt.Path -match "pr-\d+$") ) {
+                $wt.ToMove = $true
+                Write-Host "`thas a non-standard name" -ForegroundColor Yellow
+            } else {
+                Write-Host "`thas a standard name" -ForegroundColor Green
+            }
+
+            if ($wt.ToMove) {
+                Write-Host "`tso will be moved." -ForegroundColor Yellow
+            } else {
+                Write-Host "`tso will be left as is." -ForegroundColor Green
+            }
+        } catch {
+            Pop-Location
         }
     }
 
-    $manual = Read-Host "Nie udało się ustalić repo z bieżącego katalogu. Podaj repo (owner/name)"
-    if ([string]::IsNullOrWhiteSpace($manual)) {
-        throw "Nie podano repozytorium (owner/name)."
+    Set-Location $MainRepoPath
+    $worktreesToMove = $worktrees | Where-Object { $_.ToMove }
+
+    foreach ($wt in $worktreesToMove) {
+        
+        $prDirName = "pr-$($wt.PrNumber)"
+        $newPath = Join-Path $workTreeDirectory $prDirName
+        Write-Host "Renaming '$($wt.Path)' to '$newPath'..." -ForegroundColor Cyan
+        
+        if (Test-Path -LiteralPath $newPath) {
+            Write-Host "Cannot rename '$($wt.Path)' to '$newPath' because the target already exists. Skipping." -ForegroundColor Red
+            continue;
+        }
+
+        git worktree move $wt.Path $newPath
     }
 
-    return $manual.Trim()
+
 }
 
 <#
@@ -1312,4 +1426,4 @@ function New-DevWorktree {
     Push-Location -LiteralPath $worktreePath
 }
 
-Export-ModuleMember -Function Open-PrDirs, New-EmptyPrWorktree, New-WorktreeForPr, ConvertTo-PrWorktree, New-DevWorktree
+Export-ModuleMember -Function Open-PrDirs, New-EmptyPrWorktree, New-WorktreeForPr, ConvertTo-PrWorktree, New-DevWorktree, Rename-WorktreesDirectories
