@@ -1,5 +1,11 @@
 $script:ZtrAdoRequiredHintShown = $false
 
+function Esc {
+    param([AllowEmptyString()][AllowNull()][string]$Text)
+    if ([string]::IsNullOrEmpty($Text)) { return '' }
+    return Get-SpectreEscapedText -Text $Text
+}
+
 function Get-MainRepoPath {
     Write-Debug "Get-MainRepoPath: Invoked in directory: $(Get-Location)"
 
@@ -291,12 +297,6 @@ function Open-PrDirs {
     function Write-StatusWarn { param([string]$Msg) Write-SpectreHost "   [yellow]$Msg[/]" }
     function Write-StatusDim { param([string]$Msg) Write-SpectreHost "   [grey]$Msg[/]" }
     function Write-StatusErr { param([string]$Msg) Write-SpectreHost "   [red]$Msg[/]" }
-
-    function Esc {
-        param([AllowEmptyString()][AllowNull()][string]$Text)
-        if ([string]::IsNullOrEmpty($Text)) { return '' }
-        return Get-SpectreEscapedText -Text $Text
-    }
 
     $bannerData = @(
         "[bold]Path[/]       : $(Esc $Path)"
