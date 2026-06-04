@@ -74,7 +74,8 @@ function Resolve-RepoNameWithOwner {
     $nwo = & gh repo view --json nameWithOwner --jq '.nameWithOwner' | Select-Object -First 1
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($nwo)) {
         return $nwo.Trim()
-    } else {
+    }
+    else {
         throw "Nie podano repozytorium (owner/name)."
     }
 }
@@ -98,7 +99,8 @@ function Get-AllWorktrees {
                 $worktrees += [PSCustomObject]($current)
                 $current = @{}
             }
-        } elseif ($_.StartsWith("worktree")) { 
+        }
+        elseif ($_.StartsWith("worktree")) { 
             $current.Path = $_.Split(" ")[1]
             if ($count -eq 0) {
                 $current.IsMain = $true
@@ -130,7 +132,8 @@ function Rename-WorktreesDirectories {
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
         $Path = Get-Location
-    } else {
+    }
+    else {
         Set-Location -Path $Path
     }
     
@@ -149,48 +152,52 @@ function Rename-WorktreesDirectories {
     Write-Debug "Normalized (\ -> /) worktree directory: $($workTreeDirectory)"
 
     foreach ($wt in $worktrees) {
+        if ($wt.IsMain) { continue }
+        
         try {
-            if ($wt.IsMain) { continue }
-
             Push-Location $wt.Path
 
             $wt.PrNumber = gh pr view --json number 
-                            | ConvertFrom-Json 2>$null 
-                            | Select-Object -ExpandProperty number 2>$null
-
-            Write-Host "Worktree: $($wt.Path)"
-            if (-not $wt.PrNumber) {
-                Write-Host "`tdoes not seem to be associated with a PR (gh pr view failed), skipping." -ForegroundColor Gray
-                continue;
-            }
-            else {
-                Write-Host "'$($wt.Path)'"
-                Write-Host "`tis associated with PR #$($wt.PrNumber)." -ForegroundColor Green
-            }
-
-            if (-not ($wt.Path -like "$workTreeDirectory*")) {
-                $wt.ToMove = $true
-                Write-Host "`tis in incorrect root location" -ForegroundColor Yellow
-            }
-            else {
-                Write-Host "`tis in correct root location" -ForegroundColor Green
-            }
-
-            if (-not ($wt.Path -match "pr-\d+$") ) {
-                $wt.ToMove = $true
-                Write-Host "`thas a non-standard name" -ForegroundColor Yellow
-            } else {
-                Write-Host "`thas a standard name" -ForegroundColor Green
-            }
-
-            if ($wt.ToMove) {
-                Write-Host "`tso will be moved." -ForegroundColor Yellow
-            } else {
-                Write-Host "`tso will be left as is." -ForegroundColor Green
-            }
-        } catch {
+            | ConvertFrom-Json 2>$null 
+            | Select-Object -ExpandProperty number 2>$null
+        }
+        catch {
             Pop-Location
         }
+
+        Write-Host "Worktree: $($wt.Path)"
+        if (-not $wt.PrNumber) {
+            Write-Host "`tdoes not seem to be associated with a PR (gh pr view failed), skipping." -ForegroundColor Gray
+            continue;
+        }
+        else {
+            Write-Host "'$($wt.Path)'"
+            Write-Host "`tis associated with PR #$($wt.PrNumber)." -ForegroundColor Green
+        }
+
+        if (-not ($wt.Path -like "$workTreeDirectory*")) {
+            $wt.ToMove = $true
+            Write-Host "`tis in incorrect root location" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "`tis in correct root location" -ForegroundColor Green
+        }
+
+        if (-not ($wt.Path -match "pr-\d+$") ) {
+            $wt.ToMove = $true
+            Write-Host "`thas a non-standard name" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "`thas a standard name" -ForegroundColor Green
+        }
+
+        if ($wt.ToMove) {
+            Write-Host "`tso will be moved." -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "`tso will be left as is." -ForegroundColor Green
+        }
+        
     }
 
     Set-Location $MainRepoPath
@@ -251,11 +258,11 @@ function Open-PrDirs {
     Import-Module PwshSpectreConsole -ErrorAction Stop
 
     $dirs = Get-ChildItem -Path $Path -Directory |
-        Where-Object { $_.Name -match '^pr-(\d+)$' } |
-        Sort-Object {
-            $m = [regex]::Match($_.Name, '^pr-(\d+)$')
-            if ($m.Success) { [int]$m.Groups[1].Value } else { [int]::MaxValue }
-        }
+    Where-Object { $_.Name -match '^pr-(\d+)$' } |
+    Sort-Object {
+        $m = [regex]::Match($_.Name, '^pr-(\d+)$')
+        if ($m.Success) { [int]$m.Groups[1].Value } else { [int]::MaxValue }
+    }
 
     if (-not $dirs) {
         Write-SpectreHost "[yellow]Nie znalazłem katalogów pasujących do wzorca pr-XXX w: $(Esc $Path)[/]"
@@ -280,10 +287,10 @@ function Open-PrDirs {
         return
     }
 
-    function Write-StatusOk   { param([string]$Msg) Write-SpectreHost "   [green]$Msg[/]" }
+    function Write-StatusOk { param([string]$Msg) Write-SpectreHost "   [green]$Msg[/]" }
     function Write-StatusWarn { param([string]$Msg) Write-SpectreHost "   [yellow]$Msg[/]" }
-    function Write-StatusDim  { param([string]$Msg) Write-SpectreHost "   [grey]$Msg[/]" }
-    function Write-StatusErr  { param([string]$Msg) Write-SpectreHost "   [red]$Msg[/]" }
+    function Write-StatusDim { param([string]$Msg) Write-SpectreHost "   [grey]$Msg[/]" }
+    function Write-StatusErr { param([string]$Msg) Write-SpectreHost "   [red]$Msg[/]" }
 
     function Esc {
         param([AllowEmptyString()][AllowNull()][string]$Text)
@@ -306,7 +313,7 @@ function Open-PrDirs {
         param([string]$PrNumber)
 
         try {
-            $json = gh pr view $PrNumber -R $Repo --json number,state,isDraft,url,mergedAt 2>$null
+            $json = gh pr view $PrNumber -R $Repo --json number, state, isDraft, url, mergedAt 2>$null
             if ($LASTEXITCODE -eq 0 -and $json) {
                 return $json | ConvertFrom-Json
             }
@@ -512,17 +519,17 @@ function Open-PrDirs {
                         if ($LASTEXITCODE -ne 0) {
                             $msg = ($removeOut | ForEach-Object { "$_" }) -join "`n"
                             return @{
-                                Ok = $false
-                                Err = "git worktree remove zwrócił błąd: $msg"
+                                Ok              = $false
+                                Err             = "git worktree remove zwrócił błąd: $msg"
                                 PwdBeforeRemove = $pwdBeforeRemove
-                                PwdChanged = $pwdChanged
+                                PwdChanged      = $pwdChanged
                             }
                         }
 
                         return @{
-                            Ok = $true
+                            Ok              = $true
                             PwdBeforeRemove = $pwdBeforeRemove
-                            PwdChanged = $pwdChanged
+                            PwdChanged      = $pwdChanged
                         }
                     }
                     catch {
@@ -581,10 +588,10 @@ function Open-PrDirs {
         }
 
         $items.Add([pscustomobject]@{
-            Dir      = $dir
-            PrNumber = $prNumber
-            PrInfo   = $prInfo
-        })
+                Dir      = $dir
+                PrNumber = $prNumber
+                PrInfo   = $prInfo
+            })
     }
 
     if ($items.Count -eq 0) {
@@ -613,11 +620,11 @@ function Open-PrDirs {
         }
 
         $summary.Add([pscustomobject]@{
-            Worktree = $item.Dir.Name
-            PRStatus = $prStatus
-            Otwarcie = if ($opened) { 'OK' } else { 'błąd' }
-            Usuwanie = $removeStatus
-        })
+                Worktree = $item.Dir.Name
+                PRStatus = $prStatus
+                Otwarcie = if ($opened) { 'OK' } else { 'błąd' }
+                Usuwanie = $removeStatus
+            })
     }
 
     Write-SpectreRule -Title "[blue]Podsumowanie[/]" -Alignment "Left" -Color "Blue"
@@ -825,7 +832,7 @@ function New-EmptyPrWorktree {
     }
 
     $branchName = if ($adoNumberClean) { "task/$adoNumberClean/$shortNameClean" } else { "devWorktree/$shortNameClean" }
-    $prTitle    = if ($adoNumberClean) { "[AB#$adoNumberClean] $shortName" } else { $shortName }
+    $prTitle = if ($adoNumberClean) { "[AB#$adoNumberClean] $shortName" } else { $shortName }
 
     Write-Host ""
     Write-Host "Tworzę branch bez checkouta i bez worktree..." -ForegroundColor Cyan
@@ -1077,7 +1084,7 @@ function ConvertTo-PrWorktree {
     $gitExists = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
 
     if (-not $gitExists) { throw "Wymagane jest narzędzie 'git'." }
-    if (-not $ghExists)  { throw "Wymagane jest narzędzie 'gh' (GitHub CLI)." }
+    if (-not $ghExists) { throw "Wymagane jest narzędzie 'gh' (GitHub CLI)." }
 
     # ---- Resolve worktree path ----
     if (-not (Test-Path -LiteralPath $WorktreePath)) {
@@ -1139,7 +1146,8 @@ function ConvertTo-PrWorktree {
     if ($AdoNumber) {
         $adoExtracted = $AdoNumber
         Write-Debug "Using ADO number from parameter: $adoExtracted"
-    } else {
+    }
+    else {
         if ($branchName -match 'task/(\d+)') { $adoExtracted = $Matches[1] }
         elseif ($branchName -match '(\d{3,})') { $adoExtracted = $Matches[1] }
         Write-Debug "Extracted ADO number from branch name: $adoExtracted"
@@ -1156,18 +1164,20 @@ function ConvertTo-PrWorktree {
     if (-not $remoteExists) {
         if ($adoNumber) {
             Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/task/${adoNumber}/$branchName")
-        } else {
+        }
+        else {
             Invoke-Git "push branch" @('-C', $worktreeRoot, 'push', '-u', 'origin', "refs/heads/${branchName}:refs/heads/$branchName")
         }
-    } else {
-            Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin', 'HEAD')
+    }
+    else {
+        Invoke-Git "push branch (sync)" @('-C', $worktreeRoot, 'push', 'origin', 'HEAD')
         
     }
 
 
     # ---- Build title/body from last commit on the branch ----
     $commitSubject = (& git -C $worktreeRoot log -1 --format=%s 2>$null | Out-String).Trim()
-    $commitBody    = (& git -C $worktreeRoot log -1 --format=%b 2>$null | Out-String).Trim()
+    $commitBody = (& git -C $worktreeRoot log -1 --format=%b 2>$null | Out-String).Trim()
 
     if ([string]::IsNullOrWhiteSpace($commitSubject)) {
         throw "Nie udało się odczytać subjectu ostatniego commita."
@@ -1193,10 +1203,10 @@ function ConvertTo-PrWorktree {
     # ---- Create PR ----
     $prArgs = @(
         'pr', 'create',
-        '--base',  $TargetBranch,
-        '--head',  $branchName,
+        '--base', $TargetBranch,
+        '--head', $branchName,
         '--title', $title,
-        '--body',  $body
+        '--body', $body
     )
     if (-not $NotDraft) { $prArgs += '--draft' }
 
@@ -1371,7 +1381,8 @@ function New-DevWorktree {
 
     if ($adoNumberClean) {
         $BranchName = "task/$adoNumberClean/$normalizedInput"
-    } else {
+    }
+    else {
         $BranchName = "devWorktree/$normalizedInput"
     }
 
