@@ -9,7 +9,8 @@ $dependencies = @(
     @{ Name = "GitHub CLI"; Check = "gh"; WingetId = "GitHub.cli" },
     @{ Name = "oh-my-posh"; Check = "oh-my-posh"; WingetId = "JanDeDobbeleer.OhMyPosh" },
     @{ Name = "just"; Check = "just"; WingetId = "casey.just" },
-    @{ Name = "PwshSpectreConsole"; Check = "Write-SpectreHost"; Module = "PwshSpectreConsole" }
+    @{ Name = "PwshSpectreConsole"; Check = "Write-SpectreHost"; Module = "PwshSpectreConsole" },
+    @{ Name = "Tortoise Git"; Check = "TortoiseGitProc"; WingetId = "TortoiseGit.TortoiseGit" }
 )
 
 Write-Host "Rozpoczynam sprawdzanie zależności..." -ForegroundColor Cyan
