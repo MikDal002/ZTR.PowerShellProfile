@@ -13,7 +13,9 @@ function Get-MainRepoPath {
     if (-not [string]::IsNullOrWhiteSpace($gitCommonDir)) {
         $gitCommonDir = $gitCommonDir.Trim()
         if (Test-Path -LiteralPath $gitCommonDir) {
-            return Split-Path -Path $gitCommonDir -Parent
+            $resolvedPath = Split-Path -Path $gitCommonDir -Parent
+            Write-Debug "Resolved main repo path: $resolvedPath"
+            return $resolvedPath
         }
     }
 
@@ -313,13 +315,13 @@ function Open-PrDirs {
         param([string]$PrNumber)
 
         try {
-            $json = gh pr view $PrNumber -R $Repo --json number, state, isDraft, url, mergedAt 2>$null
+            $json = gh pr view $PrNumber -R $Repo --json number, state, isDraft, url, mergedAt
             if ($LASTEXITCODE -eq 0 -and $json) {
                 return $json | ConvertFrom-Json
             }
         }
         catch {
-            # brak danych — wyżej obsłużymy null
+            Write-StatusErr "nie udało się pobrać info o PR #$PrNumber $(Esc $_.Exception.Message)"
         }
         return $null
     }
