@@ -78,6 +78,12 @@ function Get-PromptYouHateThisImplementation {
         $resolvedScope = $resolvedScope.Replace('{{current_branch}}', $currentBranch)
     }
 
+    Write-SpectreHost "[cyan bold]Resolved review scope[/]"
+    $resolvedScope -split "`n" | Where-Object { $_ } | ForEach-Object {
+        Write-SpectreHost "> [white]$_[/]"
+    }
+    Write-SpectreHost ""
+
     $templatePath = Get-PromptTemplatePath -TemplateName 'you-hate-this-implementation-md'
     $template = Get-Content -LiteralPath $templatePath -Raw -Encoding UTF8
 
@@ -366,12 +372,28 @@ function Invoke-Prompt {
     if (-not [string]::IsNullOrWhiteSpace($PromptConfig.OutpuDirectory)) {
         $reviewDirPath = Join-Path -Path $WorkingDirectory -ChildPath $PromptConfig.OutpuDirectory
         if (-not (Test-Path -LiteralPath $reviewDirPath -PathType Container)) {
-            New-Item -Path $reviewDirPath -ItemType Directory -Force | Out-Null
+            New-Item -Path $reviewDirPath -ItemType Directory -Force
             Write-SpectreHost "[cyan]Utworzono katalog review: $(Esc $reviewDirPath)[/]"
         }
     }
 
-    Write-SpectreHost "[cyan]Przygotowuje lokalny review: runner=$Runner, model=$Model ($modelId), mode=$Auto, cwd=$WorkingDirectory[/]"
+    $outputDirectory = if ([string]::IsNullOrWhiteSpace($PromptConfig.OutpuDirectory)) {
+        '(none)'
+    }
+    else {
+        $PromptConfig.OutpuDirectory
+    }
+
+    $runSummary = @(
+        [pscustomobject]@{ Parameter = 'Runner'; Value = $Runner }
+        [pscustomobject]@{ Parameter = 'Model'; Value = "$Model ($modelId)" }
+        [pscustomobject]@{ Parameter = 'Mode'; Value = $Auto }
+        [pscustomobject]@{ Parameter = 'Working directory'; Value = $WorkingDirectory }
+        [pscustomobject]@{ Parameter = 'Output directory'; Value = $outputDirectory }
+    )
+
+    Write-SpectreRule -Title "[cyan]Preparing local review[/]" -Alignment "Left" -Color "Cyan1"
+    $runSummary | Format-SpectreTable -Color "Cyan1" -HeaderColor "Cyan1"
 
     $tempPromptFile = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("local-review.{0}.md" -f ([Guid]::NewGuid().ToString('N')))
     Set-Content -LiteralPath $tempPromptFile -Value $promptText -Encoding UTF8
