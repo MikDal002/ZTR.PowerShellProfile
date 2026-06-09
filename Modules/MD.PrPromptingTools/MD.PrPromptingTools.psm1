@@ -243,7 +243,7 @@ function Invoke-DroidExecModelRun {
     }
 }
 
-function Invoke-GeminiRun {
+function Invoke-AntigravityRun {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -270,20 +270,38 @@ function Invoke-GeminiRun {
             }
         }.GetNewClosure())
 
-    $output = $statusResult.Output | ConvertFrom-Json -ErrorAction Stop
-    $exitCode = $statusResult.ExitCode
+    $jsonText = ($statusResult.Output | ForEach-Object { "$_" }) -join "`n"
+    $output = $null
 
-    if ($exitCode -ne 0) {
-        $errMsg = ($output | ForEach-Object { "$_" }) -join "`n"
-        throw "gemini CLI zakonczyl sie bledem: $errMsg"
+    if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
+        try {
+            # Extract JSON payload using regex, specifically looking for the last balanced { } block if possible, 
+            # but usually the last {.*} is the main response object.
+            $matches = [regex]::Matches($jsonText, '(?s)\{.*\}')
+            if ($matches.Count -gt 0) {
+                $potentialJson = $matches[$matches.Count - 1].Value
+                $output = $potentialJson | ConvertFrom-Json -ErrorAction Stop
+            }
+        }
+        catch {
+            # Parsing failed, we'll handle this below by checking if $output is null
+        }
+    }
+
+    if ($null -eq $output -or $statusResult.ExitCode -ne 0) {
+        $cleanMsg = $jsonText -replace '(?s)\s+at (file|node):.*?\n', "`n" # Remove noisy stack traces
+        throw "gemini CLI zakonczyl sie bledem (exit code $($statusResult.ExitCode)) lub nie mozna sparsowac wyniku.`nRaw output:`n$($cleanMsg.Trim())"
     }
 
     $elapsedSec = [Math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
     Write-SpectreHost "[green]Koniec gemini CLI: czas=${elapsedSec}s[/]"
 
+    $sid = if ($output.PSObject.Properties['session_id']) { $output.session_id } else { $null }
+    $res = if ($output.PSObject.Properties['response']) { $output.response } elseif ($output.PSObject.Properties['result']) { $output.result } else { "" }
+
     return [pscustomobject]@{
-        SessionId = if ($output.session_id) { [string]$output.session_id } else { $null }
-        Output = $output.response
+        SessionId = [string]$sid
+        Output = [string]$res
         DurationMs = [int]((Get-Date) - $startedAt).TotalMilliseconds
     }
 }
@@ -404,7 +422,7 @@ function Invoke-Prompt {
                 $run = Invoke-DroidExecModelRun -Model $modelId -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory -Auto $Auto
             }
             'gemini' {
-                $run = Invoke-GeminiRun -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory
+                $run = Invoke-AntigravityRun -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory
             }
             default {
                 throw "Nieobslugiwany runner: '$Runner'. Obecnie wspierane to 'droid' i 'gemini'."
