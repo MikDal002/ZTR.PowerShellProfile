@@ -80,6 +80,7 @@ function Resolve-RepoNameWithOwner {
     Write-Debug "Resolve-RepoNameWithOwner: In directory $(Get-Location)"
     
     $nwo = & gh repo view --json nameWithOwner --jq '.nameWithOwner' | Select-Object -First 1
+    Write-Debug "Resolve-RepoNameWithOwner: Retrieved nameWithOwner: $nwo (ExitCode: $LASTEXITCODE)"
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($nwo)) {
         return $nwo.Trim()
     }
@@ -313,11 +314,16 @@ function Open-PrDirs {
 
     function Get-PrInfo {
         param([string]$PrNumber)
+        
+        Write-Debug "Getting PR info for #$PrNumber using gh CLI..."
 
         try {
-            $json = gh pr view $PrNumber -R $Repo --json number, state, isDraft, url, mergedAt
+            $json = gh pr view $PrNumber --repo $Repo --json number,state,isDraft,url,mergedAt
+
             if ($LASTEXITCODE -eq 0 -and $json) {
                 return $json | ConvertFrom-Json
+            } else {
+                throw "gh pr view zwrócił błąd ($LASTEXITCODE) lub pusty wynik ($json)"
             }
         }
         catch {
@@ -413,9 +419,9 @@ function Open-PrDirs {
         if ($ghExists -and $gitExists) {
             Push-Location $Dir.FullName
             try {
-                git rev-parse --is-inside-work-tree *> $null
+                git rev-parse --is-inside-work-tree
                 if ($LASTEXITCODE -eq 0) {
-                    gh pr view --web *> $null
+                    gh pr view --web
                     if ($LASTEXITCODE -eq 0) {
                         $opened = $true
                         Write-StatusOk "otwarto przez gh z kontekstu katalogu -> $(Esc $url)"
@@ -432,7 +438,7 @@ function Open-PrDirs {
 
         if (-not $opened -and $ghExists) {
             try {
-                gh pr view $PrNumber -R $Repo --web *> $null
+                gh pr view $PrNumber -R $Repo --web
                 if ($LASTEXITCODE -eq 0) {
                     $opened = $true
                     Write-StatusOk "otwarto przez gh po numerze PR -> $(Esc $url)"
