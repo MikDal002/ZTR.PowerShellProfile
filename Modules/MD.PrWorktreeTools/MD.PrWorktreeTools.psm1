@@ -1,10 +1,7 @@
 $script:ZtrAdoRequiredHintShown = $false
 
-function Esc {
-    param([AllowEmptyString()][AllowNull()][string]$Text)
-    if ([string]::IsNullOrEmpty($Text)) { return '' }
-    return Get-SpectreEscapedText -Text $Text
-}
+$commonModulePath = Join-Path -Path $PSScriptRoot -ChildPath "../MD.Common/MD.Common.psm1"
+Import-Module $commonModulePath -ErrorAction Stop
 
 function Get-MainRepoPath {
     Write-Debug "Get-MainRepoPath: Invoked in directory: $(Get-Location)"

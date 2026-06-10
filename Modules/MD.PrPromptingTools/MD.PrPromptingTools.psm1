@@ -9,6 +9,8 @@ class PromptConfig {
 }
 
 Import-Module PwshSpectreConsole
+$commonModulePath = Join-Path -Path $PSScriptRoot -ChildPath "../MD.Common/MD.Common.psm1"
+Import-Module $commonModulePath -ErrorAction Stop
 
 function Get-PromptingModuleRoot {
     $module = $MyInvocation.MyCommand.Module
@@ -80,7 +82,7 @@ function Get-PromptYouHateThisImplementation {
 
     Write-SpectreHost "[cyan bold]Resolved review scope[/]"
     $resolvedScope -split "`n" | Where-Object { $_ } | ForEach-Object {
-        Write-SpectreHost "> [white]$_[/]"
+        Write-SpectreHost "> [white]$(Esc $_)[/]"
     }
     Write-SpectreHost ""
 
