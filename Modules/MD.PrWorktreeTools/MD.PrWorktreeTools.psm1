@@ -580,6 +580,8 @@ function Open-PrDirs {
             $prInfo = Get-PrInfo -PrNumber $prNumber
         }
 
+        $status = Get-PrStatusLabel -PrInfo $prInfo
+
         if ($NotOpen) {
             if (-not $prInfo) {
                 Write-SpectreRule -Title "[cyan]$(Esc $dir.Name)[/]" -Alignment "Left"
@@ -587,11 +589,15 @@ function Open-PrDirs {
                 continue
             }
 
-            if ($prInfo.state -eq "OPEN") {
-                $label = if ($prInfo.isDraft) { "draft/open" } else { "open" }
+            if ($status -like "*open*") {
                 Write-SpectreRule -Title "[cyan]$(Esc $dir.Name)[/]" -Alignment "Left"
-                Write-StatusDim "pominięto (filtr -NotOpen): $label"
+                Write-StatusDim "pominięto (filtr -NotOpen): $status"
                 continue
+            }
+            
+            if ($status -eq "closed" -or $status -eq "merged") {
+                Write-SpectreRule -Title "[cyan]$(Esc $dir.Name)[/]" -Alignment "Left"
+                Write-StatusOk "uwzględniono (filtr -NotOpen): $status"
             }
         }
 
