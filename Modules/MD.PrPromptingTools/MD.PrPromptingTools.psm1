@@ -11,6 +11,7 @@ class PromptConfig {
 Import-Module PwshSpectreConsole
 $commonModulePath = Join-Path -Path $PSScriptRoot -ChildPath "../MD.Common/MD.Common.psm1"
 Import-Module $commonModulePath -ErrorAction Stop
+. (Join-Path -Path $PSScriptRoot -ChildPath 'Invoke-AntigravityRun.ps1')
 
 function Get-PromptingModuleRoot {
     $module = $MyInvocation.MyCommand.Module
@@ -66,7 +67,7 @@ function Get-PromptYouHateThisImplementation {
     #>
     [CmdletBinding()]
     param(
-        [string]$Scope =  "Do a ``git diff {{HEAD}}...{{current_branch}}``"
+        [string]$Scope = "Do a ``git diff {{HEAD}}...{{current_branch}}``"
     )
 
     $resolvedScope = $Scope.Trim()
@@ -126,7 +127,7 @@ function Get-PromptImprovePendingReview {
 
     Push-Location -LiteralPath $WorkingDirectory
     try {
-        $prRaw = & gh pr view --json number,headRepository,headRepositoryOwner 2>&1
+        $prRaw = & gh pr view --json number, headRepository, headRepositoryOwner 2>&1
         if ($LASTEXITCODE -ne 0) { throw "gh pr view nie powiodlo sie: $($prRaw | Out-String)" }
         $prInfo = ($prRaw | Out-String) | ConvertFrom-Json
 
@@ -138,9 +139,9 @@ function Get-PromptImprovePendingReview {
     }
 
     $template = Get-Content -LiteralPath (Get-PromptTemplatePath -TemplateName 'improve-my-pending-review-comments') -Raw -Encoding UTF8
-    $template = $template.Replace('{{prNumber}}',    [string]$prInfo.number)
-    $template = $template.Replace('{{repoOwner}}',   [string]$prInfo.headRepositoryOwner.login)
-    $template = $template.Replace('{{repoName}}',    [string]$prInfo.headRepository.name)
+    $template = $template.Replace('{{prNumber}}', [string]$prInfo.number)
+    $template = $template.Replace('{{repoOwner}}', [string]$prInfo.headRepositoryOwner.login)
+    $template = $template.Replace('{{repoName}}', [string]$prInfo.headRepository.name)
     $template = $template.Replace('{{currentUser}}', $currentUser)
 
     return [PromptConfig]::new($template, '.pr-review')
@@ -207,7 +208,7 @@ function Invoke-DroidExecModelRun {
         -ScriptBlock ({
             $output = & droid @droidArgs 2>&1
             return [pscustomobject]@{
-                Output = $output
+                Output   = $output
                 ExitCode = $LASTEXITCODE
             }
         }.GetNewClosure())
@@ -238,75 +239,13 @@ function Invoke-DroidExecModelRun {
     Write-SpectreHost "[green]Koniec droid exec: model=$Model, session=$($result.session_id), czas=${elapsedSec}s[/]"
 
     return [pscustomobject]@{
-        Model = $Model
-        SessionId = [string]$result.session_id
-        Output = [string]$result.result
+        Model      = $Model
+        Output     = [string]$result.result
+        SessionId  = [string]$result.session_id
         DurationMs = if ($result.duration_ms) { [int]$result.duration_ms } else { $null }
     }
 }
 
-function Invoke-AntigravityRun {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$PromptFilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$WorkingDirectory
-    )
-
-    Write-SpectreHost "[cyan]Start gemini CLI: cwd=$WorkingDirectory[/]"
-
-    $startedAt = Get-Date
-
-    $promptText = Get-Content -LiteralPath $PromptFilePath -Raw
-    
-    $statusResult = Invoke-SpectreCommandWithStatus `
-        -Title "Gemini CLI run" `
-        -Spinner "Dots" `
-        -ScriptBlock ({
-            $output = & gemini --skip-trust --approval-mode auto_edit --model auto --output-format json --prompt $promptText 2>&1
-            return [pscustomobject]@{
-                Output = $output
-                ExitCode = $LASTEXITCODE
-            }
-        }.GetNewClosure())
-
-    $jsonText = ($statusResult.Output | ForEach-Object { "$_" }) -join "`n"
-    $output = $null
-
-    if (-not [string]::IsNullOrWhiteSpace($jsonText)) {
-        try {
-            # Extract JSON payload using regex, specifically looking for the last balanced { } block if possible, 
-            # but usually the last {.*} is the main response object.
-            $matches = [regex]::Matches($jsonText, '(?s)\{.*\}')
-            if ($matches.Count -gt 0) {
-                $potentialJson = $matches[$matches.Count - 1].Value
-                $output = $potentialJson | ConvertFrom-Json -ErrorAction Stop
-            }
-        }
-        catch {
-            # Parsing failed, we'll handle this below by checking if $output is null
-        }
-    }
-
-    if ($null -eq $output -or $statusResult.ExitCode -ne 0) {
-        $cleanMsg = $jsonText -replace '(?s)\s+at (file|node):.*?\n', "`n" # Remove noisy stack traces
-        throw "gemini CLI zakonczyl sie bledem (exit code $($statusResult.ExitCode)) lub nie mozna sparsowac wyniku.`nRaw output:`n$($cleanMsg.Trim())"
-    }
-
-    $elapsedSec = [Math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
-    Write-SpectreHost "[green]Koniec gemini CLI: czas=${elapsedSec}s[/]"
-
-    $sid = if ($output.PSObject.Properties['session_id']) { $output.session_id } else { $null }
-    $res = if ($output.PSObject.Properties['response']) { $output.response } elseif ($output.PSObject.Properties['result']) { $output.result } else { "" }
-
-    return [pscustomobject]@{
-        SessionId = [string]$sid
-        Output = [string]$res
-        DurationMs = [int]((Get-Date) - $startedAt).TotalMilliseconds
-    }
-}
 
 function Invoke-Prompt {
     <#
@@ -314,7 +253,7 @@ function Invoke-Prompt {
         Uruchamia droid exec z podanym promptem i modelem AI.
     .DESCRIPTION
         Przyjmuje PromptConfig z Get-Prompt*, zapisuje prompt do pliku tymczasowego,
-        wywołuje wybrany runner (droid exec lub gemini CLI, zależnie od parametru
+        wywołuje wybrany runner (droid exec lub agy CLI, zależnie od parametru
         Runner / zmiennej $env:ZTR_DEFAULT_RUNNER) i zwraca wynik sesji.
         Jeśli PromptConfig.OutpuDirectory jest niepuste, katalog jest
         tworzony przed uruchomieniem Runnera — agent zapisze tam pliki .md.
@@ -328,7 +267,7 @@ function Invoke-Prompt {
         Katalog roboczy przekazywany do droid exec (--cwd). Domyślnie bieżący.
     .PARAMETER Auto
         Poziom autonomii droid exec: readonly, low, medium (domyślny), high.
-        Parametr ignorowany gdy Runner='gemini'.
+        Parametr ignorowany gdy Runner='agy'.
     .OUTPUTS
         PSCustomObject z polami: Runner, Model, ModelId, Mode, SessionId, Output, DurationMs.
     .EXAMPLE
@@ -355,11 +294,13 @@ function Invoke-Prompt {
 
         [switch]$SkipCode,
 
+        [ValidateSet('droid', 'agy')]
         [string]$Runner = $(if ($env:ZTR_DEFAULT_RUNNER) { $env:ZTR_DEFAULT_RUNNER } else { 'droid' })
+
     )
 
     if ([string]::IsNullOrWhiteSpace($env:ZTR_DEFAULT_RUNNER) -and -not $script:ZtrDefaultRunnerHintShown) {
-        Write-SpectreHost "[yellow]HINT: Obecnie Invoke-Prompt uzywa domyslnego runnera 'droid'. Mozesz przelaczyc sie na np. 'gemini' ustawiajac zmienna srodowiskowa `$env:ZTR_DEFAULT_RUNNER = 'gemini' w swoim profilu lub odpalajac setup.ps1.[/]"
+        Write-SpectreHost "[yellow]HINT: Obecnie Invoke-Prompt uzywa domyslnego runnera 'droid'. Mozesz przelaczyc sie na np. 'agy' ustawiajac zmienna srodowiskowa `$env:ZTR_DEFAULT_RUNNER = 'agy' w swoim profilu lub odpalajac setup.ps1.[/]"
         $script:ZtrDefaultRunnerHintShown = $true
     }
 
@@ -379,8 +320,8 @@ function Invoke-Prompt {
     if ($Runner -eq 'droid' -and $null -eq (Get-Command droid -ErrorAction SilentlyContinue)) {
         throw "Brak komendy 'droid'."
     }
-    if ($Runner -eq 'gemini' -and $null -eq (Get-Command gemini -ErrorAction SilentlyContinue)) {
-        throw "Brak komendy 'gemini'."
+    if ($Runner -eq 'agy' -and $null -eq (Get-Command agy -ErrorAction SilentlyContinue)) {
+        throw "Brak komendy 'agy'. Zainstaluj Antigravity CLI."
     }
 
     if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
@@ -413,7 +354,8 @@ function Invoke-Prompt {
     )
 
     Write-SpectreRule -Title "[cyan]Preparing local review[/]" -Alignment "Left" -Color "Cyan1"
-    $runSummary | Format-SpectreTable -Color "Cyan1" -HeaderColor "Cyan1"
+    $runSummary | Format-SpectreTable -Color "Cyan1" -HeaderColor "Cyan1" | Out-SpectreHost
+
 
     $tempPromptFile = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ("local-review.{0}.md" -f ([Guid]::NewGuid().ToString('N')))
     Set-Content -LiteralPath $tempPromptFile -Value $promptText -Encoding UTF8
@@ -423,11 +365,11 @@ function Invoke-Prompt {
             'droid' {
                 $run = Invoke-DroidExecModelRun -Model $modelId -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory -Auto $Auto
             }
-            'gemini' {
+            'agy' {
                 $run = Invoke-AntigravityRun -PromptFilePath $tempPromptFile -WorkingDirectory $WorkingDirectory
             }
             default {
-                throw "Nieobslugiwany runner: '$Runner'. Obecnie wspierane to 'droid' i 'gemini'."
+                throw "Nieobslugiwany runner: '$Runner'. Obecnie wspierane to 'droid' i 'agy'."
             }
         }
     }
@@ -438,12 +380,12 @@ function Invoke-Prompt {
     }
 
     $result = [pscustomobject]@{
-        Runner = $Runner
-        Model = $Model
-        ModelId = $modelId
-        Mode = $Auto
-        SessionId = $run.SessionId
-        Output = $run.Output
+        Runner     = $Runner
+        Model      = $Model
+        ModelId    = $modelId
+        Mode       = $Auto
+        SessionId  = $run.SessionId
+        Output     = $run.Output
         DurationMs = $run.DurationMs
     }
 
@@ -452,13 +394,14 @@ function Invoke-Prompt {
     if (-not $SkipCode -and -not [string]::IsNullOrWhiteSpace($PromptConfig.ReviewDirectory)) {
         $reviewDirPath = Join-Path -Path $WorkingDirectory -ChildPath $PromptConfig.ReviewDirectory
         Get-ChildItem -LiteralPath $reviewDirPath -Filter '*.md' -File -ErrorAction SilentlyContinue |
-            ForEach-Object { & code $_.FullName }
+        ForEach-Object { & code $_.FullName }
     }
 
     if ($ContinueInAgentCLI -and $Runner -eq 'droid') {
         & droid --resume $run.SessionId
-    } elseif ($ContinueInAgentCLI -and $Runner -eq 'gemini') {
-        & gemini --resume $run.SessionId
+    }
+    elseif ($ContinueInAgentCLI -and $Runner -eq 'agy' -and $run.SessionId) {
+        & agy --conversation $run.SessionId
     }
 
     return $result

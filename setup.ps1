@@ -66,10 +66,10 @@ Import-Module PwshSpectreConsole
 
 Write-SpectreHost "Moduł MD.PrPromptingTools (komenda Invoke-Prompt) wspiera obecnie dwa silniki:"
 Write-SpectreHost "1) [cyan]droid[/]  - używa 'droid exec' jako głównego runnera."
-Write-SpectreHost "2) [cyan]gemini[/] - używa natywnego 'gemini' CLI (eksperymentalne/lekkie wywołania)."
+Write-SpectreHost "2) [cyan]agy[/]    - używa natywnego Antigravity CLI 'agy'."
 Write-SpectreHost "Brak konfiguracji domyślnie użyje [cyan]droid[/]."
 
-$choices = @("droid", "gemini", "Pomiń ustawianie")
+$choices = @("droid", "agy", "Pomiń ustawianie")
 $runnerChoice = Read-SpectreSelection -Message "Wybierz domyślnego runnera dla swojej maszyny:" -Choices $choices
 
 if ($runnerChoice -eq 'Pomiń ustawianie') {
@@ -80,10 +80,10 @@ elseif ($runnerChoice -eq 'droid') {
     $env:ZTR_DEFAULT_RUNNER = 'droid'
     Write-SpectreHost "[green]Ustawiono 'droid' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
 }
-elseif ($runnerChoice -eq 'gemini') {
-    [Environment]::SetEnvironmentVariable('ZTR_DEFAULT_RUNNER', 'gemini', 'User')
-    $env:ZTR_DEFAULT_RUNNER = 'gemini'
-    Write-SpectreHost "[green]Ustawiono 'gemini' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
+elseif ($runnerChoice -eq 'agy') {
+    [Environment]::SetEnvironmentVariable('ZTR_DEFAULT_RUNNER', 'agy', 'User')
+    $env:ZTR_DEFAULT_RUNNER = 'agy'
+    Write-SpectreHost "[green]Ustawiono 'agy' jako domyślnego runnera w ZTR_DEFAULT_RUNNER.[/]"
 }
 
 # Konfiguracja wymagania numeru ADO

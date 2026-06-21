@@ -80,7 +80,7 @@ function Open-PrDirs {
         "[bold]Remove[/]     : $Remove"
         "[bold]Force[/]      : $Force"
     ) -join "`n"
-    Format-SpectrePanel -Data $bannerData -Header "[blue]Open-PrDirs[/]" -Color "Blue"
+    Format-SpectrePanel -Data $bannerData -Header "[blue]Open-PrDirs[/]" -Color "Blue" | Out-SpectreHost
 
     function Get-PrInfo {
         param([string]$PrNumber)
@@ -412,5 +412,5 @@ function Open-PrDirs {
     }
 
     Write-SpectreRule -Title "[blue]Podsumowanie[/]" -Alignment "Left" -Color "Blue"
-    $summary | Format-SpectreTable -Color "Blue" -HeaderColor "Blue"
+    $summary | Format-SpectreTable -Color "Blue" -HeaderColor "Blue" | Out-SpectreHost
 }
